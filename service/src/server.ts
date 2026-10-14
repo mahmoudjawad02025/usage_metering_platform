@@ -2,8 +2,11 @@ import { env } from './config/env';
 import { logger } from './core/logger';
 import { createApp } from './app';
 import { closePool } from './db/pool';
+import { runMigrations } from './db/migrate';
 
 async function main(): Promise<void> {
+  await runMigrations();
+
   const app = createApp();
 
   const server = app.listen(env.PORT, () => {
