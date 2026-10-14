@@ -1,6 +1,7 @@
 import express from 'express';
 import type { Express } from 'express';
 import { pool } from './db/pool';
+import { errorHandler, notFoundHandler } from './core/middleware/error_handler.middleware';
 
 export function createApp(): Express {
   const app = express();
@@ -11,11 +12,13 @@ export function createApp(): Express {
     try {
       await pool.query('SELECT 1');
       res.json({ status: 'ok' });
-    } catch (err) {
-        console.error('health check failed:', err);
-        res.status(503).json({ status: 'unavailable' });
+    } catch {
+      res.status(503).json({ status: 'unavailable' });
     }
   });
+
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   return app;
 }
