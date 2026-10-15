@@ -1,7 +1,9 @@
 import express from 'express';
 import type { Express } from 'express';
 import { pool } from './db/pool';
+import { authenticateApiKey } from './core/middleware/authenticate_api_key.middleware';
 import { errorHandler, notFoundHandler } from './core/middleware/error_handler.middleware';
+import { plansRouter } from './modules/plans/plans.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -16,6 +18,8 @@ export function createApp(): Express {
       res.status(503).json({ status: 'unavailable' });
     }
   });
+
+  app.use('/plans', authenticateApiKey, plansRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
