@@ -106,3 +106,137 @@ describe('GET /plans/:id', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('POST /plans', () => {
+  const validBody = { scope: 'user', name: 'Team', monthlyAllowance: 500, maxPerRequest: 25 };
+
+  it('creates a custom plan and returns it with status 201', async () => {
+    const res = await api().post('/plans').set('x-api-key', accountA.apiKey).send(validBody);
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ ...validBody, isPredefined: false });
+
+    const listed = await api().get(`/plans/${res.body.id}`).set('x-api-key', accountA.apiKey);
+    expect(listed.status).toBe(200);
+  });
+
+  it('trims the plan name', async () => {
+    const res = await api()
+      .post('/plans')
+      .set('x-api-key', accountA.apiKey)
+      .send({ ...validBody, name: '  Padded  ' });
+
+    expect(res.body.name).toBe('Padded');
+  });
+
+  it('rejects a duplicate name in the same scope with 409', async () => {
+    await api().post('/plans').set('x-api-key', accountA.apiKey).send(validBody);
+    const res = await api().post('/plans').set('x-api-key', accountA.apiKey).send(validBody);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('CONFLICT');
+  });
+
+  it('allows the same name in another scope or in another account', async () => {
+    await api().post('/plans').set('x-api-key', accountA.apiKey).send(validBody);
+
+    const otherScope = await api()
+      .post('/plans')
+      .set('x-api-key', accountA.apiKey)
+      .send({ ...validBody, scope: 'account' });
+    const otherAccount = await api().post('/plans').set('x-api-key', accountB.apiKey).send(validBody);
+
+    expect(otherScope.status).toBe(201);
+    expect(otherAccount.status).toBe(201);
+  });
+
+  it.each([
+    ['negative allowance', { monthlyAllowance: -1 }],
+    ['decimal allowance', { monthlyAllowance: 1.5 }],
+    ['allowance above the maximum', { monthlyAllowance: 1_000_000_001 }],
+    ['zero per-request limit', { maxPerRequest: 0 }],
+    ['unknown scope', { scope: 'team' }],
+    ['empty name', { name: '   ' }],
+    ['unexpected field', { isPredefined: true }],
+  ])('rejects %s with 400', async (_label, override) => {
+    const res = await api()
+      .post('/plans')
+      .set('x-api-key', accountA.apiKey)
+      .send({ ...validBody, ...override });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+});
+
+describe('PATCH /plans/:id', () => {
+  async function createOwnedPlan(): Promise<string> {
+    return createTestPlan(accountA.id, {
+      scope: 'user',
+      name: 'Editable',
+      monthlyAllowance: 100,
+      maxPerRequest: 10,
+    });
+  }
+
+  it('updates only the provided fields', async () => {
+    const planId = await createOwnedPlan();
+
+    const res = await api()
+      .patch(`/plans/${planId}`)
+      .set('x-api-key', accountA.apiKey)
+      .send({ monthlyAllowance: 250 });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ name: 'Editable', monthlyAllowance: 250, maxPerRequest: 10 });
+    expect(new Date(res.body.updatedAt).getTime()).toBeGreaterThanOrEqual(
+      new Date(res.body.createdAt).getTime(),
+    );
+  });
+
+  it('refuses to edit a predefined plan with 403', async () => {
+    const res = await api()
+      .patch(`/plans/${PREDEFINED_PLAN_IDS.BASIC}`)
+      .set('x-api-key', accountA.apiKey)
+      .send({ monthlyAllowance: 1 });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('PLAN_READ_ONLY');
+  });
+
+  it('returns 404 when the plan belongs to another account', async () => {
+    const planId = await createOwnedPlan();
+
+    const res = await api()
+      .patch(`/plans/${planId}`)
+      .set('x-api-key', accountB.apiKey)
+      .send({ monthlyAllowance: 1 });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('cannot change the scope and needs at least one field', async () => {
+    const planId = await createOwnedPlan();
+
+    const scopeChange = await api()
+      .patch(`/plans/${planId}`)
+      .set('x-api-key', accountA.apiKey)
+      .send({ scope: 'account' });
+    const empty = await api().patch(`/plans/${planId}`).set('x-api-key', accountA.apiKey).send({});
+
+    expect(scopeChange.status).toBe(400);
+    expect(empty.status).toBe(400);
+  });
+
+  it('rejects renaming into an existing name with 409', async () => {
+    const planId = await createOwnedPlan();
+    await createTestPlan(accountA.id, { scope: 'user', name: 'Taken', monthlyAllowance: 1, maxPerRequest: 1 });
+
+    const res = await api()
+      .patch(`/plans/${planId}`)
+      .set('x-api-key', accountA.apiKey)
+      .send({ name: 'Taken' });
+
+    expect(res.status).toBe(409);
+  });
+});

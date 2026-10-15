@@ -1,6 +1,6 @@
 import { pool } from '../../db/pool';
 import type { ListPlansQuery } from './plans.schemas';
-import type { Plan, PlanScope } from './plans.types';
+import type { CreatePlanInput, Plan, PlanScope, UpdatePlanInput } from './plans.types';
 
 interface PlanRow {
   id: string;
@@ -62,6 +62,37 @@ export async function findVisiblePlanById(
     `SELECT ${PLAN_COLUMNS} FROM plans
      WHERE id = $1 AND (account_id IS NULL OR account_id = $2)`,
     [planId, accountId],
+  );
+  const row = rows[0];
+  return row ? toPlan(row) : null;
+}
+
+export async function insertPlan(accountId: string, input: CreatePlanInput): Promise<Plan> {
+  const { rows } = await pool.query<PlanRow>(
+    `INSERT INTO plans (account_id, scope, name, monthly_allowance, max_per_request, is_predefined)
+     VALUES ($1, $2, $3, $4, $5, FALSE)
+     RETURNING ${PLAN_COLUMNS}`,
+    [accountId, input.scope, input.name, input.monthlyAllowance, input.maxPerRequest],
+  );
+  const row = rows[0];
+  if (!row) throw new Error('Plan insert returned no row');
+  return toPlan(row);
+}
+
+export async function updateOwnedPlan(
+  accountId: string,
+  planId: string,
+  patch: UpdatePlanInput,
+): Promise<Plan | null> {
+  const { rows } = await pool.query<PlanRow>(
+    `UPDATE plans
+     SET name = COALESCE($3, name),
+         monthly_allowance = COALESCE($4, monthly_allowance),
+         max_per_request = COALESCE($5, max_per_request),
+         updated_at = now()
+     WHERE id = $1 AND account_id = $2 AND NOT is_predefined
+     RETURNING ${PLAN_COLUMNS}`,
+    [planId, accountId, patch.name ?? null, patch.monthlyAllowance ?? null, patch.maxPerRequest ?? null],
   );
   const row = rows[0];
   return row ? toPlan(row) : null;
