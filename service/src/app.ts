@@ -3,6 +3,7 @@ import type { Express } from 'express';
 import { pool } from './db/pool';
 import { authenticateApiKey } from './core/middleware/authenticate_api_key.middleware';
 import { errorHandler, notFoundHandler } from './core/middleware/error_handler.middleware';
+import { accountsRouter } from './modules/accounts/accounts.routes';
 import { plansRouter } from './modules/plans/plans.routes';
 
 export function createApp(): Express {
@@ -19,6 +20,7 @@ export function createApp(): Express {
     }
   });
 
+  app.use('/accounts', accountsRouter);
   app.use('/plans', authenticateApiKey, plansRouter);
 
   app.use(notFoundHandler);

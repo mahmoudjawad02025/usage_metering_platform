@@ -19,6 +19,27 @@ export const PLAN_COLUMNS =
 const VISIBLE_PLANS_FILTER =
   '(account_id IS NULL OR account_id = $1) AND ($2::text IS NULL OR scope = $2)';
 
+export interface JoinedPlanRow {
+  plan_id: string;
+  plan_scope: PlanScope;
+  plan_name: string;
+  plan_monthly_allowance: number;
+  plan_max_per_request: number;
+  plan_is_predefined: boolean;
+  plan_created_at: Date;
+  plan_updated_at: Date;
+}
+
+export const JOINED_PLAN_COLUMNS = `
+  p.id AS plan_id,
+  p.scope AS plan_scope,
+  p.name AS plan_name,
+  p.monthly_allowance AS plan_monthly_allowance,
+  p.max_per_request AS plan_max_per_request,
+  p.is_predefined AS plan_is_predefined,
+  p.created_at AS plan_created_at,
+  p.updated_at AS plan_updated_at`;
+
 export function toPlan(row: PlanRow): Plan {
   return {
     id: row.id,
@@ -29,6 +50,19 @@ export function toPlan(row: PlanRow): Plan {
     isPredefined: row.is_predefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+export function toPlanFromJoin(row: JoinedPlanRow): Plan {
+  return {
+    id: row.plan_id,
+    scope: row.plan_scope,
+    name: row.plan_name,
+    monthlyAllowance: row.plan_monthly_allowance,
+    maxPerRequest: row.plan_max_per_request,
+    isPredefined: row.plan_is_predefined,
+    createdAt: row.plan_created_at,
+    updatedAt: row.plan_updated_at,
   };
 }
 

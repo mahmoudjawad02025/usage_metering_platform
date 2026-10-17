@@ -1,10 +1,10 @@
-import { ConflictError, ForbiddenError, NotFoundError } from '../../core/errors/app_error';
+import { AppError, ConflictError, ForbiddenError, NotFoundError } from '../../core/errors/app_error';
 import { ERROR_CODES } from '../../core/errors/error_codes';
 import { buildPage, type Page } from '../../core/utils/pagination';
 import { isUniqueViolation } from '../../db/pg_errors';
 import * as plansRepository from './plans.repository';
 import type { ListPlansQuery } from './plans.schemas';
-import type { CreatePlanInput, Plan, UpdatePlanInput } from './plans.types';
+import type { CreatePlanInput, Plan, PlanScope, UpdatePlanInput } from './plans.types';
 
 const PLAN_NAME_CONSTRAINT = 'plans_unique_name_per_owner_and_scope';
 
@@ -52,4 +52,22 @@ export async function updatePlan(
     }
     throw err;
   }
+}
+
+export async function getAssignablePlan(
+  accountId: string | null,
+  planId: string,
+  scope: PlanScope,
+): Promise<Plan> {
+  const plan = await plansRepository.findVisiblePlanById(accountId, planId);
+  if (!plan) throw new NotFoundError('Plan not found');
+
+  if (plan.scope !== scope) {
+    throw new AppError(
+      400,
+      ERROR_CODES.PLAN_SCOPE_MISMATCH,
+      `Plan "${plan.name}" is a ${plan.scope} plan, but a ${scope} plan is required here`,
+    );
+  }
+  return plan;
 }
