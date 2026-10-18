@@ -1,4 +1,5 @@
 import type { PoolClient } from 'pg';
+import { pool } from '../../db/pool';
 import type {
   AppliedLimits,
   Counters,
@@ -7,6 +8,8 @@ import type {
   RejectedRule,
   RuleLevel,
   StoredRequest,
+  UsageRow,
+  UserUsageRow,
 } from './usage.types';
 
 interface PlanSnapshotRow {
@@ -190,4 +193,88 @@ export async function insertRequest(
   const row = rows[0];
   if (!row) throw new Error('Request insert returned no row');
   return toStoredRequest(row);
+}
+
+interface UsageRowRecord {
+  plan_id: string;
+  plan_name: string;
+  monthly_allowance: number;
+  max_per_request: number;
+  consumed: number;
+}
+
+interface UserUsageRowRecord extends UsageRowRecord {
+  user_id: string;
+  external_id: string;
+}
+
+function toUsageRow(row: UsageRowRecord): UsageRow {
+  return {
+    planId: row.plan_id,
+    planName: row.plan_name,
+    monthlyAllowance: row.monthly_allowance,
+    maxPerRequest: row.max_per_request,
+    consumed: row.consumed,
+  };
+}
+
+function toUserUsageRow(row: UserUsageRowRecord): UserUsageRow {
+  return { ...toUsageRow(row), userId: row.user_id, externalId: row.external_id };
+}
+
+const USER_USAGE_SELECT = `
+  SELECT u.id AS user_id, u.external_id,
+         p.id AS plan_id, p.name AS plan_name, p.monthly_allowance, p.max_per_request,
+         COALESCE(uu.consumed, 0) AS consumed
+  FROM users u
+  JOIN plans p ON p.id = u.plan_id
+  LEFT JOIN user_usage uu ON uu.user_id = u.id AND uu.period = $2`;
+
+export async function getAccountUsage(accountId: string, period: string): Promise<UsageRow | null> {
+  const { rows } = await pool.query<UsageRowRecord>(
+    `SELECT p.id AS plan_id, p.name AS plan_name, p.monthly_allowance, p.max_per_request,
+            COALESCE(au.consumed, 0) AS consumed
+     FROM accounts a
+     JOIN plans p ON p.id = a.plan_id
+     LEFT JOIN account_usage au ON au.account_id = a.id AND au.period = $2
+     WHERE a.id = $1`,
+    [accountId, period],
+  );
+  const row = rows[0];
+  return row ? toUsageRow(row) : null;
+}
+
+export async function listUserUsage(
+  accountId: string,
+  period: string,
+  limit: number,
+  offset: number,
+): Promise<{ items: UserUsageRow[]; total: number }> {
+  const { rows } = await pool.query<UserUsageRowRecord>(
+    `${USER_USAGE_SELECT}
+     WHERE u.account_id = $1
+     ORDER BY u.created_at ASC, u.id ASC
+     LIMIT $3 OFFSET $4`,
+    [accountId, period, limit, offset],
+  );
+
+  const count = await pool.query<{ total: number }>(
+    'SELECT COUNT(*) AS total FROM users WHERE account_id = $1',
+    [accountId],
+  );
+
+  return { items: rows.map(toUserUsageRow), total: count.rows[0]?.total ?? 0 };
+}
+
+export async function getUserUsage(
+  accountId: string,
+  userId: string,
+  period: string,
+): Promise<UserUsageRow | null> {
+  const { rows } = await pool.query<UserUsageRowRecord>(
+    `${USER_USAGE_SELECT} WHERE u.account_id = $1 AND u.id = $3`,
+    [accountId, period, userId],
+  );
+  const row = rows[0];
+  return row ? toUserUsageRow(row) : null;
 }

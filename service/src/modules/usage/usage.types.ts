@@ -98,3 +98,27 @@ export interface ConsumeResponse {
   account: LevelView;
   user: LevelView & { id: string };
 }
+
+export interface UsageRow {
+  planId: string;
+  planName: string;
+  monthlyAllowance: number;
+  maxPerRequest: number;
+  consumed: number;
+}
+
+export interface UserUsageRow extends UsageRow {
+  userId: string;
+  externalId: string;
+}
+
+export interface UsageView {
+  plan: PlanView;
+  consumed: number;
+  remaining: number;
+}
+
+export interface UserUsageView extends UsageView {
+  id: string;
+  externalId: string;
+}

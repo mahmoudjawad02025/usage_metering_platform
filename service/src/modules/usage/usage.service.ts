@@ -1,9 +1,11 @@
 import { ERROR_CODES } from '../../core/errors/error_codes';
 import { ConflictError, NotFoundError } from '../../core/errors/app_error';
-import { getCurrentUtcPeriod, periodToMonth } from '../../core/utils/utc_period';
+import { buildPage, type Page } from '../../core/utils/pagination';
+import { getCurrentUtcPeriod, monthToPeriod, periodToMonth } from '../../core/utils/utc_period';
 import { withTransaction } from '../../db/transaction';
 import { describeRejection, evaluateRules, remainingUnits } from './rule_evaluator';
 import * as usageRepository from './usage.repository';
+import type { UsageQuery } from './usage.schemas';
 import type {
   AppliedLimits,
   ConsumeInput,
@@ -13,6 +15,10 @@ import type {
   LevelView,
   PlanSnapshot,
   StoredRequest,
+  UsageRow,
+  UsageView,
+  UserUsageRow,
+  UserUsageView,
 } from './usage.types';
 
 function toLevelState(snapshot: LevelSnapshot): LevelState {
@@ -119,4 +125,68 @@ export async function consumeUnits(
 
     return buildConsumeResponse(stored, false);
   });
+}
+
+export interface UsageSummary {
+  period: string;
+  account: UsageView;
+  users: Page<UserUsageView>;
+}
+
+function toUsageView(row: UsageRow): UsageView {
+  return {
+    plan: {
+      id: row.planId,
+      name: row.planName,
+      monthlyAllowance: row.monthlyAllowance,
+      maxPerRequest: row.maxPerRequest,
+    },
+    consumed: row.consumed,
+    remaining: remainingUnits({
+      monthlyAllowance: row.monthlyAllowance,
+      maxPerRequest: row.maxPerRequest,
+      consumed: row.consumed,
+    }),
+  };
+}
+
+function toUserUsageView(row: UserUsageRow): UserUsageView {
+  return { id: row.userId, externalId: row.externalId, ...toUsageView(row) };
+}
+
+function resolvePeriod(month: string | undefined): string {
+  return month ? monthToPeriod(month) : getCurrentUtcPeriod();
+}
+
+export async function getUsageSummary(accountId: string, query: UsageQuery): Promise<UsageSummary> {
+  const period = resolvePeriod(query.period);
+
+  const account = await usageRepository.getAccountUsage(accountId, period);
+  if (!account) throw new NotFoundError('Account not found');
+
+  const { items, total } = await usageRepository.listUserUsage(
+    accountId,
+    period,
+    query.limit,
+    query.offset,
+  );
+
+  return {
+    period: periodToMonth(period),
+    account: toUsageView(account),
+    users: buildPage(items.map(toUserUsageView), total, query),
+  };
+}
+
+export async function getUserUsage(
+  accountId: string,
+  userId: string,
+  month: string | undefined,
+): Promise<{ period: string; user: UserUsageView }> {
+  const period = resolvePeriod(month);
+
+  const row = await usageRepository.getUserUsage(accountId, userId, period);
+  if (!row) throw new NotFoundError('User not found');
+
+  return { period: periodToMonth(period), user: toUserUsageView(row) };
 }
