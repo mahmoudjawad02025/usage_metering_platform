@@ -20,3 +20,9 @@ export async function createAccount(input: CreateAccountBody): Promise<CreatedAc
 
   return { account: await getAccount(accountId), apiKey };
 }
+
+export async function changeAccountPlan(accountId: string, planId: string): Promise<Account> {
+  const plan = await getAssignablePlan(accountId, planId, 'account');
+  await accountsRepository.updateAccountPlan(accountId, plan.id);
+  return getAccount(accountId);
+}

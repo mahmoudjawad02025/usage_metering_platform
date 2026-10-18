@@ -5,4 +5,9 @@ export const createAccountBodySchema = z.strictObject({
   planId: z.uuid().optional(),
 });
 
+export const changeAccountPlanBodySchema = z.strictObject({
+  planId: z.uuid(),
+});
+
 export type CreateAccountBody = z.infer<typeof createAccountBodySchema>;
+export type ChangeAccountPlanBody = z.infer<typeof changeAccountPlanBodySchema>;

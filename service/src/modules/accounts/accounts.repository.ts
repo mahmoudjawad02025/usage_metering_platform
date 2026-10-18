@@ -52,3 +52,7 @@ export async function findAccountById(accountId: string): Promise<Account | null
   if (!row) return null;
   return { id: row.id, name: row.name, plan: toPlanFromJoin(row), createdAt: row.created_at };
 }
+
+export async function updateAccountPlan(accountId: string, planId: string): Promise<void> {
+  await pool.query('UPDATE accounts SET plan_id = $2 WHERE id = $1', [accountId, planId]);
+}

@@ -124,3 +124,81 @@ describe('GET /accounts/me', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('PUT /accounts/me/plan', () => {
+  it('switches to another predefined account plan', async () => {
+    const account = await createTestAccount();
+
+    const res = await api()
+      .put('/accounts/me/plan')
+      .set('x-api-key', account.apiKey)
+      .send({ planId: PREDEFINED_PLAN_IDS.PRO });
+
+    expect(res.status).toBe(200);
+    expect(res.body.plan.name).toBe('Pro');
+
+    const me = await api().get('/accounts/me').set('x-api-key', account.apiKey);
+    expect(me.body.plan.name).toBe('Pro');
+  });
+
+  it('switches to an own custom account plan', async () => {
+    const account = await createTestAccount();
+    const planId = await createTestPlan(account.id, {
+      scope: 'account',
+      name: 'Tiny',
+      monthlyAllowance: 20,
+      maxPerRequest: 5,
+    });
+
+    const res = await api()
+      .put('/accounts/me/plan')
+      .set('x-api-key', account.apiKey)
+      .send({ planId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.plan).toMatchObject({ name: 'Tiny', monthlyAllowance: 20 });
+  });
+
+  it('rejects a user plan with 400 and keeps the current plan', async () => {
+    const account = await createTestAccount();
+
+    const res = await api()
+      .put('/accounts/me/plan')
+      .set('x-api-key', account.apiKey)
+      .send({ planId: PREDEFINED_PLAN_IDS.PREMIUM });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('PLAN_SCOPE_MISMATCH');
+    const me = await api().get('/accounts/me').set('x-api-key', account.apiKey);
+    expect(me.body.plan.name).toBe('Starter');
+  });
+
+  it('returns 404 for a plan owned by another account', async () => {
+    const account = await createTestAccount();
+    const other = await createTestAccount();
+    const planId = await createTestPlan(other.id, {
+      scope: 'account',
+      monthlyAllowance: 1,
+      maxPerRequest: 1,
+    });
+
+    const res = await api()
+      .put('/accounts/me/plan')
+      .set('x-api-key', account.apiKey)
+      .send({ planId });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('validates the body and requires an API key', async () => {
+    const account = await createTestAccount();
+
+    const missing = await api().put('/accounts/me/plan').set('x-api-key', account.apiKey).send({});
+    const unauthenticated = await api()
+      .put('/accounts/me/plan')
+      .send({ planId: PREDEFINED_PLAN_IDS.PRO });
+
+    expect(missing.status).toBe(400);
+    expect(unauthenticated.status).toBe(401);
+  });
+});
