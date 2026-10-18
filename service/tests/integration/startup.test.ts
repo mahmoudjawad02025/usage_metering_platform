@@ -70,28 +70,41 @@ describe('starting the service with a wrong configuration', () => {
   });
 });
 
+async function launchServer() {
+  const port = 41000 + Math.floor(Math.random() * 4000);
+  const baseUrl = `http://localhost:${port}`;
+  const child = startServer({ PORT: String(port) });
+  let output = '';
+  child.stdout?.on('data', (chunk: Buffer) => (output += chunk.toString()));
+  const exited = exitCodeOf(child);
+  await waitUntilHealthy(baseUrl);
+  return { child, baseUrl, exited, readOutput: () => output };
+}
+
 describe('starting and stopping the real server process', () => {
-  it('migrates, serves requests and shuts down cleanly on SIGTERM', async () => {
-    const port = 41000 + Math.floor(Math.random() * 4000);
-    const baseUrl = `http://localhost:${port}`;
-    const child = startServer({ PORT: String(port) });
-    let output = '';
-    child.stdout?.on('data', (chunk: Buffer) => (output += chunk.toString()));
-    const exited = exitCodeOf(child);
+  it('migrates and serves requests', async () => {
+    const { child, baseUrl, exited } = await launchServer();
 
     try {
-      await waitUntilHealthy(baseUrl);
-
       const unauthorized = await fetch(`${baseUrl}/plans`);
       const unknown = await fetch(`${baseUrl}/nothing`);
       expect(unauthorized.status).toBe(401);
       expect(unknown.status).toBe(404);
     } finally {
-      child.kill('SIGTERM');
+      child.kill();
+      await exited;
     }
+  }, 40_000);
+
+  // Windows has no SIGTERM: kill() ends the process at once and the exit code is null.
+  // Docker runs Linux, where the signal is delivered, so the check stays for other systems.
+  it.skipIf(process.platform === 'win32')('shuts down cleanly on SIGTERM', async () => {
+    const { child, exited, readOutput } = await launchServer();
+
+    child.kill('SIGTERM');
 
     expect(await exited).toBe(0);
-    expect(output).toContain('usage metering service started');
-    expect(output).toContain('shutting down');
+    expect(readOutput()).toContain('usage metering service started');
+    expect(readOutput()).toContain('shutting down');
   }, 40_000);
 });
