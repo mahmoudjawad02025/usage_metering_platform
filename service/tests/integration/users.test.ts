@@ -183,3 +183,94 @@ describe('GET /users/:id', () => {
     expect(res.status).toBe(401);
   });
 });
+
+
+describe('PUT /users/:id/plan', () => {
+  it('switches the user to another predefined plan', async () => {
+    const user = await createTestUser(accountA.id);
+
+    const res = await api()
+      .put(`/users/${user.id}/plan`)
+      .set('x-api-key', accountA.apiKey)
+      .send({ planId: PREDEFINED_PLAN_IDS.PREMIUM });
+
+    expect(res.status).toBe(200);
+    expect(res.body.plan.name).toBe('Premium');
+
+    const fetched = await api().get(`/users/${user.id}`).set('x-api-key', accountA.apiKey);
+    expect(fetched.body.plan.name).toBe('Premium');
+  });
+
+  it('lets several users share one custom plan', async () => {
+    const planId = await createTestPlan(accountA.id, {
+      scope: 'user',
+      name: 'Shared',
+      monthlyAllowance: 30,
+      maxPerRequest: 3,
+    });
+    const first = await createTestUser(accountA.id);
+    const second = await createTestUser(accountA.id);
+
+    for (const user of [first, second]) {
+      const res = await api()
+        .put(`/users/${user.id}/plan`)
+        .set('x-api-key', accountA.apiKey)
+        .send({ planId });
+      expect(res.body.plan.id).toBe(planId);
+    }
+  });
+
+  it('rejects an account plan with 400 and keeps the current plan', async () => {
+    const user = await createTestUser(accountA.id);
+
+    const res = await api()
+      .put(`/users/${user.id}/plan`)
+      .set('x-api-key', accountA.apiKey)
+      .send({ planId: PREDEFINED_PLAN_IDS.PRO });
+
+    expect(res.status).toBe(400);
+    const fetched = await api().get(`/users/${user.id}`).set('x-api-key', accountA.apiKey);
+    expect(fetched.body.plan.name).toBe('Basic');
+  });
+
+  it('returns 404 for a plan owned by another account', async () => {
+    const user = await createTestUser(accountA.id);
+    const planId = await createTestPlan(accountB.id, {
+      scope: 'user',
+      monthlyAllowance: 1,
+      maxPerRequest: 1,
+    });
+
+    const res = await api()
+      .put(`/users/${user.id}/plan`)
+      .set('x-api-key', accountA.apiKey)
+      .send({ planId });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 when the user belongs to another account', async () => {
+    const foreign = await createTestUser(accountB.id);
+
+    const res = await api()
+      .put(`/users/${foreign.id}/plan`)
+      .set('x-api-key', accountA.apiKey)
+      .send({ planId: PREDEFINED_PLAN_IDS.PREMIUM });
+
+    expect(res.status).toBe(404);
+    const untouched = await api().get(`/users/${foreign.id}`).set('x-api-key', accountB.apiKey);
+    expect(untouched.body.plan.name).toBe('Basic');
+  });
+
+  it('validates the body and requires an API key', async () => {
+    const user = await createTestUser(accountA.id);
+
+    const missing = await api().put(`/users/${user.id}/plan`).set('x-api-key', accountA.apiKey).send({});
+    const unauthenticated = await api()
+      .put(`/users/${user.id}/plan`)
+      .send({ planId: PREDEFINED_PLAN_IDS.PREMIUM });
+
+    expect(missing.status).toBe(400);
+    expect(unauthenticated.status).toBe(401);
+  });
+});

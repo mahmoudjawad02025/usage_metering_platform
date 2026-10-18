@@ -62,3 +62,15 @@ export async function listUsers(
 
   return { items: rows.map(toUser), total: count.rows[0]?.total ?? 0 };
 }
+
+export async function updateUserPlan(
+  accountId: string,
+  userId: string,
+  planId: string,
+): Promise<boolean> {
+  const result = await pool.query(
+    'UPDATE users SET plan_id = $3 WHERE id = $1 AND account_id = $2',
+    [userId, accountId, planId],
+  );
+  return (result.rowCount ?? 0) > 0;
+}

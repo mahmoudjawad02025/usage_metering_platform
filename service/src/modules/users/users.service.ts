@@ -33,3 +33,17 @@ export async function registerUser(accountId: string, input: RegisterUserBody): 
     throw err;
   }
 }
+
+export async function changeUserPlan(
+  accountId: string,
+  userId: string,
+  planId: string,
+): Promise<User> {
+  await getUser(accountId, userId);
+  const plan = await getAssignablePlan(accountId, planId, 'user');
+
+  const updated = await usersRepository.updateUserPlan(accountId, userId, plan.id);
+  if (!updated) throw new NotFoundError('User not found');
+
+  return getUser(accountId, userId);
+}

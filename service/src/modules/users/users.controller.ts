@@ -1,6 +1,11 @@
 import type { Request, Response } from 'express';
 import { requireAccount } from '../../core/middleware/authenticate_api_key.middleware';
-import type { ListUsersQuery, RegisterUserBody, UserIdParams } from './users.schemas';
+import type {
+  ChangeUserPlanBody,
+  ListUsersQuery,
+  RegisterUserBody,
+  UserIdParams,
+} from './users.schemas';
 import * as usersService from './users.service';
 
 export async function registerUserController(req: Request, res: Response): Promise<void> {
@@ -19,4 +24,11 @@ export async function getUserController(req: Request, res: Response): Promise<vo
   const account = requireAccount(req);
   const { id } = req.params as unknown as UserIdParams;
   res.json(await usersService.getUser(account.id, id));
+}
+
+export async function changeUserPlanController(req: Request, res: Response): Promise<void> {
+  const account = requireAccount(req);
+  const { id } = req.params as unknown as UserIdParams;
+  const body = req.body as ChangeUserPlanBody;
+  res.json(await usersService.changeUserPlan(account.id, id, body.planId));
 }
