@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { MAX_PLAN_LIMIT } from '../../core/constants';
 import { paginationQuerySchema } from '../../core/utils/pagination';
 
-const periodSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'period must be in the format YYYY-MM');
+export const periodSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'period must be in the format YYYY-MM');
 
 export const consumeBodySchema = z.strictObject({
   userId: z.uuid(),

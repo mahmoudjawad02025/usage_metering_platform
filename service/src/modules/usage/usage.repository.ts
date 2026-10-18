@@ -19,7 +19,7 @@ interface PlanSnapshotRow {
   max_per_request: number;
 }
 
-interface RequestRow {
+export interface RequestRow {
   id: string;
   request_id: string;
   user_id: string;
@@ -32,10 +32,10 @@ interface RequestRow {
   created_at: Date;
 }
 
-const REQUEST_COLUMNS =
+export const REQUEST_COLUMNS =
   'id, request_id, user_id, units, period, accepted, rejected_rule, rejected_level, applied_limits, created_at';
 
-function toStoredRequest(row: RequestRow): StoredRequest {
+export function toStoredRequest(row: RequestRow): StoredRequest {
   return {
     id: row.id,
     requestId: row.request_id,
