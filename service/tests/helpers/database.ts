@@ -20,3 +20,18 @@ export async function resetDatabase(): Promise<void> {
 export async function closeDatabase(): Promise<void> {
   await pool.end();
 }
+
+export async function readConsumed(
+  accountId: string,
+  userId: string,
+): Promise<{ account: number; user: number }> {
+  const account = await pool.query<{ total: number }>(
+    'SELECT COALESCE(SUM(consumed), 0)::int AS total FROM account_usage WHERE account_id = $1',
+    [accountId],
+  );
+  const user = await pool.query<{ total: number }>(
+    'SELECT COALESCE(SUM(consumed), 0)::int AS total FROM user_usage WHERE user_id = $1',
+    [userId],
+  );
+  return { account: account.rows[0]?.total ?? 0, user: user.rows[0]?.total ?? 0 };
+}

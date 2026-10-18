@@ -68,3 +68,33 @@ export interface NewRequest {
   decision: Decision;
   appliedLimits: AppliedLimits;
 }
+
+export interface ConsumeInput {
+  userId: string;
+  units: number;
+  requestId: string;
+}
+
+export interface PlanView {
+  id: string;
+  name: string;
+  monthlyAllowance: number;
+  maxPerRequest: number;
+}
+
+export interface LevelView {
+  plan: PlanView;
+  consumed: number;
+  remaining: number;
+}
+
+export interface ConsumeResponse {
+  accepted: boolean;
+  replayed: boolean;
+  requestId: string;
+  units: number;
+  period: string;
+  rejection: Rejection | null;
+  account: LevelView;
+  user: LevelView & { id: string };
+}
