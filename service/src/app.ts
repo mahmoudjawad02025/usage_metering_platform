@@ -5,6 +5,7 @@ import { authenticateApiKey } from './core/middleware/authenticate_api_key.middl
 import { errorHandler, notFoundHandler } from './core/middleware/error_handler.middleware';
 import { accountsRouter } from './modules/accounts/accounts.routes';
 import { plansRouter } from './modules/plans/plans.routes';
+import { usersRouter } from './modules/users/users.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -22,6 +23,7 @@ export function createApp(): Express {
 
   app.use('/accounts', accountsRouter);
   app.use('/plans', authenticateApiKey, plansRouter);
+  app.use('/users', authenticateApiKey, usersRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
