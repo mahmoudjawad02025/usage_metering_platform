@@ -24,3 +24,47 @@ export interface Rejection {
   limit: number;
   remaining?: number;
 }
+
+export interface PlanSnapshot {
+  planId: string;
+  planName: string;
+  monthlyAllowance: number;
+  maxPerRequest: number;
+}
+
+export interface LevelSnapshot extends PlanSnapshot {
+  consumedBefore: number;
+}
+
+export interface AppliedLimits {
+  account: LevelSnapshot;
+  user: LevelSnapshot;
+}
+
+export interface Counters {
+  accountConsumed: number;
+  userConsumed: number;
+}
+
+export interface StoredRequest {
+  id: string;
+  requestId: string;
+  userId: string;
+  units: number;
+  period: string;
+  accepted: boolean;
+  rejectedRule: RejectedRule | null;
+  rejectedLevel: RuleLevel | null;
+  appliedLimits: AppliedLimits;
+  createdAt: Date;
+}
+
+export interface NewRequest {
+  accountId: string;
+  userId: string;
+  requestId: string;
+  units: number;
+  period: string;
+  decision: Decision;
+  appliedLimits: AppliedLimits;
+}
