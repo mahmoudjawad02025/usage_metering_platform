@@ -1,0 +1,81 @@
+{
+  "label": "baseline-2",
+  "notes": "",
+  "scenario": "hot-account-limited",
+  "description": "1 account x 100 users, account allowance of 5000 units: most requests are rejected",
+  "startedAt": "2026-10-19T09:01:37.820Z",
+  "environment": {
+    "node": "v24.13.1",
+    "platform": "win32 10.0.26300",
+    "cpus": 20,
+    "cpuModel": "13th Gen Intel(R) Core(TM) i7-13700H",
+    "memoryGb": 16,
+    "serviceUrl": "http://localhost:3000"
+  },
+  "parameters": {
+    "connections": 50,
+    "durationSeconds": 20,
+    "warmupSeconds": 3,
+    "accounts": 1,
+    "usersPerAccount": 100,
+    "maxUnits": 10,
+    "accountPlan": {
+      "monthlyAllowance": 5000,
+      "maxPerRequest": 10
+    },
+    "userPlan": {
+      "monthlyAllowance": 1000000,
+      "maxPerRequest": 10
+    }
+  },
+  "results": {
+    "requestsPerSecond": 160.9,
+    "totalRequests": 3218,
+    "latencyMs": {
+      "average": 308.78,
+      "p50": 307,
+      "p97_5": 371,
+      "p99": 380,
+      "max": 488
+    },
+    "successfulResponses": 3218,
+    "non2xx": 0,
+    "errors": 0,
+    "timeouts": 0
+  },
+  "outcomes": {
+    "accepted": 909,
+    "rejected": 2359
+  },
+  "verification": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "account counter = sum of user counters = sum of accepted units in the log",
+        "passed": true,
+        "detail": "1 account-months checked, 0 inconsistent"
+      },
+      {
+        "name": "no account counter is above its monthly allowance",
+        "passed": true,
+        "detail": "0 account-months above the allowance"
+      },
+      {
+        "name": "every user counter = accepted units of that user in the log",
+        "passed": true,
+        "detail": "0 users differ from their log"
+      },
+      {
+        "name": "no user counter is above its monthly allowance",
+        "passed": true,
+        "detail": "0 users above the allowance"
+      },
+      {
+        "name": "every successful response has exactly one log row",
+        "passed": true,
+        "detail": "3218 responses, 3268 log rows (50 requests were still in flight when the test stopped, at most 50 allowed)"
+      }
+    ],
+    "loggedRequests": 3268
+  }
+}

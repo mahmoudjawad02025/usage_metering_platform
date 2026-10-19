@@ -3,7 +3,7 @@
   "notes": "",
   "scenario": "spread",
   "description": "20 accounts x 50 users, limits so high that every request is accepted",
-  "startedAt": "2026-10-19T08:09:06.439Z",
+  "startedAt": "2026-10-19T08:58:58.148Z",
   "environment": {
     "node": "v24.13.1",
     "platform": "win32 10.0.26300",
@@ -29,22 +29,22 @@
     }
   },
   "results": {
-    "requestsPerSecond": 593.15,
-    "totalRequests": 11863,
+    "requestsPerSecond": 353.4,
+    "totalRequests": 7068,
     "latencyMs": {
-      "average": 83.62,
-      "p50": 82,
-      "p97_5": 104,
-      "p99": 112,
-      "max": 185
+      "average": 140.74,
+      "p50": 138,
+      "p97_5": 177,
+      "p99": 195,
+      "max": 262
     },
-    "successfulResponses": 11863,
+    "successfulResponses": 7068,
     "non2xx": 0,
     "errors": 0,
     "timeouts": 0
   },
   "outcomes": {
-    "accepted": 11913,
+    "accepted": 7118,
     "rejected": 0
   },
   "verification": {
@@ -73,9 +73,9 @@
       {
         "name": "every successful response has exactly one log row",
         "passed": true,
-        "detail": "11863 responses, 11913 log rows (50 requests were still in flight when the test stopped, at most 50 allowed)"
+        "detail": "7068 responses, 7118 log rows (50 requests were still in flight when the test stopped, at most 50 allowed)"
       }
     ],
-    "loggedRequests": 11913
+    "loggedRequests": 7118
   }
 }
