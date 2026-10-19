@@ -1,0 +1,6 @@
+node_modules
+dist
+.demo_state.json
+web_app/build
+web_app/.dart_tool
+web_app/.idea
