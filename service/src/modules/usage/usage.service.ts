@@ -82,7 +82,6 @@ export async function consumeUnits(
     if (!userExists) throw new NotFoundError('User not found');
 
     const period = getCurrentUtcPeriod(now);
-    await usageRepository.ensureCounters(client, accountId, input.userId, period);
     const counters = await usageRepository.lockCounters(client, accountId, input.userId, period);
 
     const existing = await usageRepository.findRequest(client, accountId, input.requestId);
@@ -96,8 +95,7 @@ export async function consumeUnits(
       return buildConsumeResponse(existing, true);
     }
 
-    const accountPlan = await usageRepository.getAccountPlan(client, accountId);
-    const userPlan = await usageRepository.getUserPlan(client, input.userId);
+    const { accountPlan, userPlan } = await usageRepository.getPlans(client, accountId, input.userId);
     const appliedLimits: AppliedLimits = {
       account: toSnapshot(accountPlan, counters.accountConsumed),
       user: toSnapshot(userPlan, counters.userConsumed),

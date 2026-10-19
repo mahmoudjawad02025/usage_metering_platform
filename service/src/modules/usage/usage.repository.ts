@@ -12,13 +12,6 @@ import type {
   UserUsageRow,
 } from './usage.types';
 
-interface PlanSnapshotRow {
-  plan_id: string;
-  plan_name: string;
-  monthly_allowance: number;
-  max_per_request: number;
-}
-
 export interface RequestRow {
   id: string;
   request_id: string;
@@ -30,6 +23,17 @@ export interface RequestRow {
   rejected_level: RuleLevel | null;
   applied_limits: AppliedLimits;
   created_at: Date;
+}
+
+interface PlansRow {
+  account_plan_id: string;
+  account_plan_name: string;
+  account_monthly_allowance: number;
+  account_max_per_request: number;
+  user_plan_id: string;
+  user_plan_name: string;
+  user_monthly_allowance: number;
+  user_max_per_request: number;
 }
 
 export const REQUEST_COLUMNS =
@@ -50,12 +54,39 @@ export function toStoredRequest(row: RequestRow): StoredRequest {
   };
 }
 
-function toPlanSnapshot(row: PlanSnapshotRow): PlanSnapshot {
+export async function getPlans(
+  client: PoolClient,
+  accountId: string,
+  userId: string,
+): Promise<{ accountPlan: PlanSnapshot; userPlan: PlanSnapshot }> {
+  const { rows } = await client.query<PlansRow>(
+    `SELECT ap.id AS account_plan_id, ap.name AS account_plan_name,
+            ap.monthly_allowance AS account_monthly_allowance, ap.max_per_request AS account_max_per_request,
+            up.id AS user_plan_id, up.name AS user_plan_name,
+            up.monthly_allowance AS user_monthly_allowance, up.max_per_request AS user_max_per_request
+     FROM accounts a
+     JOIN plans ap ON ap.id = a.plan_id
+     JOIN users u ON u.id = $2 AND u.account_id = a.id
+     JOIN plans up ON up.id = u.plan_id
+     WHERE a.id = $1`,
+    [accountId, userId],
+  );
+  const row = rows[0];
+  if (!row) throw new Error('The account or user plan was not found');
+
   return {
-    planId: row.plan_id,
-    planName: row.plan_name,
-    monthlyAllowance: row.monthly_allowance,
-    maxPerRequest: row.max_per_request,
+    accountPlan: {
+      planId: row.account_plan_id,
+      planName: row.account_plan_name,
+      monthlyAllowance: row.account_monthly_allowance,
+      maxPerRequest: row.account_max_per_request,
+    },
+    userPlan: {
+      planId: row.user_plan_id,
+      planName: row.user_plan_name,
+      monthlyAllowance: row.user_monthly_allowance,
+      maxPerRequest: row.user_max_per_request,
+    },
   };
 }
 
@@ -71,20 +102,38 @@ export async function userBelongsToAccount(
   return (result.rowCount ?? 0) > 0;
 }
 
-export async function ensureCounters(
-  client: PoolClient,
-  accountId: string,
-  userId: string,
-  period: string,
-): Promise<void> {
+async function lockAccountCounter(client: PoolClient, accountId: string, period: string): Promise<number> {
+  const select = 'SELECT consumed FROM account_usage WHERE account_id = $1 AND period = $2 FOR UPDATE';
+
+  const first = await client.query<{ consumed: number }>(select, [accountId, period]);
+  const existing = first.rows[0];
+  if (existing) return existing.consumed;
+
   await client.query(
     'INSERT INTO account_usage (account_id, period) VALUES ($1, $2) ON CONFLICT DO NOTHING',
     [accountId, period],
   );
+  const second = await client.query<{ consumed: number }>(select, [accountId, period]);
+  const created = second.rows[0];
+  if (!created) throw new Error('The account usage counter is missing after it was created');
+  return created.consumed;
+}
+
+async function lockUserCounter(client: PoolClient, userId: string, period: string): Promise<number> {
+  const select = 'SELECT consumed FROM user_usage WHERE user_id = $1 AND period = $2 FOR UPDATE';
+
+  const first = await client.query<{ consumed: number }>(select, [userId, period]);
+  const existing = first.rows[0];
+  if (existing) return existing.consumed;
+
   await client.query(
     'INSERT INTO user_usage (user_id, period) VALUES ($1, $2) ON CONFLICT DO NOTHING',
     [userId, period],
   );
+  const second = await client.query<{ consumed: number }>(select, [userId, period]);
+  const created = second.rows[0];
+  if (!created) throw new Error('The user usage counter is missing after it was created');
+  return created.consumed;
 }
 
 export async function lockCounters(
@@ -93,20 +142,9 @@ export async function lockCounters(
   userId: string,
   period: string,
 ): Promise<Counters> {
-  const account = await client.query<{ consumed: number }>(
-    'SELECT consumed FROM account_usage WHERE account_id = $1 AND period = $2 FOR UPDATE',
-    [accountId, period],
-  );
-  const user = await client.query<{ consumed: number }>(
-    'SELECT consumed FROM user_usage WHERE user_id = $1 AND period = $2 FOR UPDATE',
-    [userId, period],
-  );
-
-  const accountRow = account.rows[0];
-  const userRow = user.rows[0];
-  if (!accountRow || !userRow) throw new Error('Usage counters are missing after ensureCounters');
-
-  return { accountConsumed: accountRow.consumed, userConsumed: userRow.consumed };
+  const accountConsumed = await lockAccountCounter(client, accountId, period);
+  const userConsumed = await lockUserCounter(client, userId, period);
+  return { accountConsumed, userConsumed };
 }
 
 export async function findRequest(
@@ -122,32 +160,6 @@ export async function findRequest(
   return row ? toStoredRequest(row) : null;
 }
 
-export async function getAccountPlan(client: PoolClient, accountId: string): Promise<PlanSnapshot> {
-  const { rows } = await client.query<PlanSnapshotRow>(
-    `SELECT p.id AS plan_id, p.name AS plan_name, p.monthly_allowance, p.max_per_request
-     FROM accounts a
-     JOIN plans p ON p.id = a.plan_id
-     WHERE a.id = $1`,
-    [accountId],
-  );
-  const row = rows[0];
-  if (!row) throw new Error('Account plan not found');
-  return toPlanSnapshot(row);
-}
-
-export async function getUserPlan(client: PoolClient, userId: string): Promise<PlanSnapshot> {
-  const { rows } = await client.query<PlanSnapshotRow>(
-    `SELECT p.id AS plan_id, p.name AS plan_name, p.monthly_allowance, p.max_per_request
-     FROM users u
-     JOIN plans p ON p.id = u.plan_id
-     WHERE u.id = $1`,
-    [userId],
-  );
-  const row = rows[0];
-  if (!row) throw new Error('User plan not found');
-  return toPlanSnapshot(row);
-}
-
 export async function incrementCounters(
   client: PoolClient,
   accountId: string,
@@ -156,12 +168,11 @@ export async function incrementCounters(
   units: number,
 ): Promise<void> {
   await client.query(
-    'UPDATE account_usage SET consumed = consumed + $3 WHERE account_id = $1 AND period = $2',
-    [accountId, period, units],
-  );
-  await client.query(
-    'UPDATE user_usage SET consumed = consumed + $3 WHERE user_id = $1 AND period = $2',
-    [userId, period, units],
+    `WITH account_update AS (
+       UPDATE account_usage SET consumed = consumed + $3 WHERE account_id = $1 AND period = $2
+     )
+     UPDATE user_usage SET consumed = consumed + $3 WHERE user_id = $4 AND period = $2`,
+    [accountId, period, units, userId],
   );
 }
 
