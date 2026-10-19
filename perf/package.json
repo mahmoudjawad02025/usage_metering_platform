@@ -1,0 +1,29 @@
+{
+  "name": "usage_metering_perf",
+  "version": "1.0.0",
+  "private": true,
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "load:consume": "tsx --env-file=../.env scripts/load_consume.ts",
+    "load:contention": "tsx --env-file=../.env scripts/load_contention.ts",
+    "summarize": "tsx scripts/summarize_results.ts",
+    "perf": "npm run load:consume && npm run load:contention && npm run summarize"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "autocannon": "^8.0.0",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/autocannon": "^7.12.7",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
