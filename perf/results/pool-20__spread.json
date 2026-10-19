@@ -1,0 +1,81 @@
+{
+  "label": "pool-20",
+  "notes": "DB_POOL_MAX=20",
+  "scenario": "spread",
+  "description": "20 accounts x 50 users, limits so high that every request is accepted",
+  "startedAt": "2026-10-19T10:52:46.860Z",
+  "environment": {
+    "node": "v24.13.1",
+    "platform": "win32 10.0.26300",
+    "cpus": 20,
+    "cpuModel": "13th Gen Intel(R) Core(TM) i7-13700H",
+    "memoryGb": 16,
+    "serviceUrl": "http://localhost:3000"
+  },
+  "parameters": {
+    "connections": 50,
+    "durationSeconds": 20,
+    "warmupSeconds": 3,
+    "accounts": 20,
+    "usersPerAccount": 50,
+    "maxUnits": 10,
+    "accountPlan": {
+      "monthlyAllowance": 1000000000,
+      "maxPerRequest": 1000
+    },
+    "userPlan": {
+      "monthlyAllowance": 1000000000,
+      "maxPerRequest": 100
+    }
+  },
+  "results": {
+    "requestsPerSecond": 334.65,
+    "totalRequests": 6693,
+    "latencyMs": {
+      "average": 148.46,
+      "p50": 140,
+      "p97_5": 232,
+      "p99": 262,
+      "max": 403
+    },
+    "successfulResponses": 6693,
+    "non2xx": 0,
+    "errors": 0,
+    "timeouts": 0
+  },
+  "outcomes": {
+    "accepted": 6743,
+    "rejected": 0
+  },
+  "verification": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "account counter = sum of user counters = sum of accepted units in the log",
+        "passed": true,
+        "detail": "20 account-months checked, 0 inconsistent"
+      },
+      {
+        "name": "no account counter is above its monthly allowance",
+        "passed": true,
+        "detail": "0 account-months above the allowance"
+      },
+      {
+        "name": "every user counter = accepted units of that user in the log",
+        "passed": true,
+        "detail": "0 users differ from their log"
+      },
+      {
+        "name": "no user counter is above its monthly allowance",
+        "passed": true,
+        "detail": "0 users above the allowance"
+      },
+      {
+        "name": "every successful response has exactly one log row",
+        "passed": true,
+        "detail": "6693 responses, 6743 log rows (50 requests were still in flight when the test stopped, at most 50 allowed)"
+      }
+    ],
+    "loggedRequests": 6743
+  }
+}
