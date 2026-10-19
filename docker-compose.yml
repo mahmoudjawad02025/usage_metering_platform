@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: usage_metering_service_postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-usage_metering}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-usage_metering_password}
+      POSTGRES_DB: ${POSTGRES_DB:-usage_metering_service}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -15,6 +15,27 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
+  service:
+    build:
+      context: ./service
+    container_name: usage_metering_service
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      ADMIN_KEY: ${ADMIN_KEY:-change_me_to_a_long_random_admin_key}
+      DATABASE_URL: postgres://${POSTGRES_USER:-usage_metering}:${POSTGRES_PASSWORD:-usage_metering_password}@postgres:5432/${POSTGRES_DB:-usage_metering_service}
+    ports:
+      - "${SERVICE_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health > /dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 volumes:
   postgres_data:
