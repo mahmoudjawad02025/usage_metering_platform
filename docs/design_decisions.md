@@ -323,7 +323,7 @@ The full table is in the [API reference](api.md#errors).
 1. **Real PostgreSQL, no database mocks.** Mocks would not catch SQL or locking mistakes. Tests run in a separate database whose name must end in `_test` (checked twice), created automatically. One test injects a fault into the log insert to prove the rollback; this is the only substitution.
 2. **Layers:** unit tests for pure logic (evaluator, period, key helpers, pagination); integration tests through HTTP for every endpoint and rule; database tests with raw SQL for each constraint; migration tests on an empty database (repeated, concurrent, failing); process tests that start the real server (configuration errors, startup, shutdown); contract tests that pin the exact shape of responses and the predefined plan limits.
 3. **Numbers (as run on Windows with Docker Desktop):** 26 test files, 303 tests defined, 302 passed and 1 skipped. The skipped test checks graceful shutdown on `SIGTERM`, which Windows does not deliver to child processes; it is intended for Linux, where Docker runs the service. Coverage reported by v8: 99.34% lines, 96.59% statements, 98.31% functions, 87.89% branches. Enforced minimums: lines 95, statements 93, functions 90, branches 85.
-4. **What is not covered by automated tests:** the demo server and the Flutter UI (one Flutter model test and a manual walkthrough only), and multi-instance operation of the service.
+4. **What is not covered by automated tests:** the Flutter UI beyond model parsing tests (a manual walkthrough covers the rest), and multi-instance operation of the service.
 5. **Coverage is not proof of quality.** The defensive branches that cannot be triggered without breaking the database (for example "insert returned no row") are intentionally uncovered.
 
 <a id="performance"></a>
@@ -357,7 +357,7 @@ Full method and results: [performance.md](performance.md). Summary:
 | Plan history | A snapshot in each log row | Versioned plan tables | More schema and queries; the snapshot gives the same truth for decisions. Past `remaining` values are relative to today's plans (documented). |
 | Pagination | Offset | Keyset | The brief says simple pagination is enough. Offset is slow for very large offsets and can shift pages while rows are inserted. |
 | Migrations | Plain SQL files with an advisory lock | An ORM or migration library | SQL stays visible; tested for concurrent starts. Forward-only. |
-| Example client | A Flutter web UI plus a small server that holds the key | A Flutter-only client | Flutter web is public code, so an API key inside it would leak. |
+| Example client | A static Flutter UI behind nginx, API key in the browser | A backend-for-frontend holding the key | Not required by the brief; BFF adds a server to maintain. Tradeoff: key is visible in the browser (documented). |
 
 <a id="limitations"></a>
 
@@ -376,7 +376,7 @@ Full method and results: [performance.md](performance.md). Summary:
 11. **Windows-only run of the test suite and the load tests.** The skipped shutdown test is meant for Linux, and absolute performance numbers depend on the machine.
 12. **The load generator is closed-loop** (a fixed number of connections), so latency percentiles look better than with independent clients.
 13. **Migrations are forward-only**, and the Docker images use moving tags (`stable`, `22-alpine`, `16-alpine`).
-14. **The example application is a demo**: it has no automated tests for its server, "Reset demo" leaves old demo accounts in the database, and it skips its simulated work on a replayed request, which a real application should handle with its own record of finished work.
+14. **The example application is a demo**: it keeps the API key in browser localStorage, "forget account" leaves old demo accounts in the database, and it skips its simulated work on a replayed request, which a real application should handle with its own record of finished work.
 
 <a id="provenance"></a>
 

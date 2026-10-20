@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'api_client.dart';
 import 'models.dart';
 import 'widgets/choice_dropdown.dart';
 import 'widgets/decision_card.dart';
+import 'widgets/setup_card.dart';
 import 'widgets/usage_panel.dart';
+
 class DemoPage extends StatefulWidget {
   const DemoPage({super.key});
+
   @override
   State<DemoPage> createState() => _DemoPageState();
 }
+
 class _DemoPageState extends State<DemoPage> {
   final DemoApi _api = DemoApi();
   final TextEditingController _units = TextEditingController(text: '10');
@@ -19,17 +24,41 @@ class _DemoPageState extends State<DemoPage> {
   ({String userId, int units, String requestId})? _lastRequest;
   final List<ProcessResult> _log = [];
   bool _busy = false;
+  bool _needsSetup = false;
   String? _error;
+
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => _run(_refresh));
+    Future.microtask(_bootstrap);
   }
+
   @override
   void dispose() {
     _units.dispose();
     super.dispose();
   }
+
+  Future<void> _bootstrap() async {
+    await _run(() async {
+      final saved = await _api.loadKey();
+      if (saved == null || saved.isEmpty) {
+        setState(() => _needsSetup = true);
+        return;
+      }
+      _api.apiKey = saved;
+      final valid = await _api.hasValidKey();
+      if (!valid) {
+        await _api.clearKey();
+        _api.apiKey = null;
+        setState(() => _needsSetup = true);
+        return;
+      }
+      setState(() => _needsSetup = false);
+      await _refresh();
+    });
+  }
+
   Future<void> _run(Future<void> Function() action) async {
     setState(() {
       _busy = true;
@@ -49,6 +78,7 @@ class _DemoPageState extends State<DemoPage> {
       _error = error;
     });
   }
+
   Future<void> _refresh() async {
     final status = await _api.getStatus();
     if (!mounted) return;
@@ -60,6 +90,18 @@ class _DemoPageState extends State<DemoPage> {
       }
     });
   }
+
+  Future<void> _setup(String adminKey) {
+    return _run(() async {
+      await _api.createDemoAccount(adminKey);
+      final key = _api.apiKey;
+      if (key == null) throw const ApiException('Demo account was created without an API key.');
+      await _api.saveKey(key);
+      setState(() => _needsSetup = false);
+      await _refresh();
+    });
+  }
+
   Future<void> _process() async {
     final userId = _selectedUserId;
     final units = int.tryParse(_units.text.trim());
@@ -73,11 +115,13 @@ class _DemoPageState extends State<DemoPage> {
       requestId: 'doc-${DateTime.now().microsecondsSinceEpoch}',
     );
   }
+
   Future<void> _retry() async {
     final last = _lastRequest;
     if (last == null) return;
     await _submit(userId: last.userId, units: last.units, requestId: last.requestId);
   }
+
   Future<void> _submit({
     required String userId,
     required int units,
@@ -95,37 +139,43 @@ class _DemoPageState extends State<DemoPage> {
       await _refresh();
     });
   }
+
   Future<void> _changeUserPlan(String userId, String planId) {
     return _run(() async {
       await _api.changeUserPlan(userId, planId);
       await _refresh();
     });
   }
+
   Future<void> _changeAccountPlan(String planId) {
     return _run(() async {
       await _api.changeAccountPlan(planId);
       await _refresh();
     });
   }
-  Future<void> _reset() {
-    return _run(() async {
-      await _api.resetDemo();
-      if (!mounted) return;
-      setState(() {
-        _lastResult = null;
-        _lastRequest = null;
-        _log.clear();
-        _selectedUserId = null;
-      });
-      await _refresh();
+
+  Future<void> _reset() async {
+    await _api.clearKey();
+    _api.apiKey = null;
+    if (!mounted) return;
+    setState(() {
+      _needsSetup = true;
+      _status = null;
+      _lastResult = null;
+      _lastRequest = null;
+      _log.clear();
+      _selectedUserId = null;
+      _error = null;
     });
   }
+
   String _nameOf(StatusSnapshot status, String userId) {
     for (final user in status.users) {
       if (user.id == userId) return user.externalId;
     }
     return 'user';
   }
+
   Widget _processCard(StatusSnapshot status) {
     return Card(
       child: Padding(
@@ -182,6 +232,7 @@ class _DemoPageState extends State<DemoPage> {
       ),
     );
   }
+
   Widget _recentCard(StatusSnapshot status) {
     return Card(
       child: Padding(
@@ -208,6 +259,7 @@ class _DemoPageState extends State<DemoPage> {
       ),
     );
   }
+
   @override
   Widget build(BuildContext context) {
     final status = _status;
@@ -216,8 +268,8 @@ class _DemoPageState extends State<DemoPage> {
         title: const Text('Document processing demo'),
         actions: [
           IconButton(
-            tooltip: 'Start over with a fresh demo account',
-            onPressed: _busy ? null : _reset,
+            tooltip: 'Forget this demo account and start over',
+            onPressed: _busy || _needsSetup ? null : _reset,
             icon: const Icon(Icons.restart_alt),
           ),
         ],
@@ -228,76 +280,98 @@ class _DemoPageState extends State<DemoPage> {
               )
             : null,
       ),
-      body: status == null
-          ? Center(
-              child: _error == null
-                  ? const CircularProgressIndicator()
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_error!),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: _busy ? null : () => _run(_refresh),
-                          child: const Text('Try again'),
-                        ),
-                      ],
-                    ),
-            )
-          : SingleChildScrollView(
+      body: _needsSetup
+          ? SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1100),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final wide = constraints.maxWidth >= 900;
-                      final cardWidth = wide ? (constraints.maxWidth - 16) / 2 : constraints.maxWidth;
-                      final result = _lastResult;
-                      return Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
-                        crossAxisAlignment: WrapCrossAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: cardWidth,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _processCard(status),
-                                if (_error != null)
-                                  Card(
-                                    color: Colors.red.shade50,
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Text(_error!),
-                                    ),
-                                  ),
-                                if (result != null)
-                                  DecisionCard(
-                                    result: result,
-                                    userName: _nameOf(status, result.decision.userId),
-                                  ),
-                                if (_log.length > 1) _recentCard(status),
-                              ],
-                            ),
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Column(
+                    children: [
+                      SetupCard(busy: _busy, onCreate: _setup),
+                      if (_error != null)
+                        Card(
+                          color: Colors.red.shade50,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(_error!),
                           ),
-                          SizedBox(
-                            width: cardWidth,
-                            child: UsagePanel(
-                              status: status,
-                              busy: _busy,
-                              onAccountPlanChanged: _changeAccountPlan,
-                              onUserPlanChanged: _changeUserPlan,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+                        ),
+                    ],
                   ),
                 ),
               ),
-            ),
+            )
+          : status == null
+              ? Center(
+                  child: _error == null
+                      ? const CircularProgressIndicator()
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_error!),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              onPressed: _busy ? null : _bootstrap,
+                              child: const Text('Try again'),
+                            ),
+                          ],
+                        ),
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1100),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final wide = constraints.maxWidth >= 900;
+                          final cardWidth = wide ? (constraints.maxWidth - 16) / 2 : constraints.maxWidth;
+                          final result = _lastResult;
+                          return Wrap(
+                            spacing: 16,
+                            runSpacing: 16,
+                            crossAxisAlignment: WrapCrossAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: cardWidth,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    _processCard(status),
+                                    if (_error != null)
+                                      Card(
+                                        color: Colors.red.shade50,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Text(_error!),
+                                        ),
+                                      ),
+                                    if (result != null)
+                                      DecisionCard(
+                                        result: result,
+                                        userName: _nameOf(status, result.decision.userId),
+                                      ),
+                                    if (_log.length > 1) _recentCard(status),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(
+                                width: cardWidth,
+                                child: UsagePanel(
+                                  status: status,
+                                  busy: _busy,
+                                  onAccountPlanChanged: _changeAccountPlan,
+                                  onUserPlanChanged: _changeUserPlan,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
     );
   }
 }

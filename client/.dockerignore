@@ -1,6 +1,3 @@
-node_modules
-dist
-.demo_state.json
 demo/build
 demo/.dart_tool
 demo/.idea

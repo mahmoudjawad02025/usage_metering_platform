@@ -101,11 +101,8 @@ class ProcessResult {
   const ProcessResult({required this.processed, required this.decision});
   final bool processed;
   final Decision decision;
-  factory ProcessResult.fromJson(Map<String, dynamic> json) => ProcessResult(
-        processed: json['processed'] as bool,
-        decision: Decision.fromJson(json['decision'] as Map<String, dynamic>),
-      );
 }
+
 class StatusSnapshot {
   const StatusSnapshot({
     required this.accountName,
@@ -121,20 +118,29 @@ class StatusSnapshot {
   final List<UserUsage> users;
   final List<PlanInfo> accountPlans;
   final List<PlanInfo> userPlans;
-  factory StatusSnapshot.fromJson(Map<String, dynamic> json) {
-    final plans = json['plans'] as Map<String, dynamic>;
+
+  factory StatusSnapshot.fromResponses(
+    Map<String, dynamic> account,
+    Map<String, dynamic> usage,
+    Map<String, dynamic> plans,
+  ) {
+    final usersPage = usage['users'] as Map<String, dynamic>;
+    final planItems = (plans['items'] as List<dynamic>).cast<Map<String, dynamic>>();
     return StatusSnapshot(
-      accountName: json['accountName'] as String,
-      period: json['period'] as String,
-      account: LevelUsage.fromJson(json['account'] as Map<String, dynamic>),
-      users: (json['users'] as List<dynamic>)
+      accountName: account['name'] as String,
+      period: usage['period'] as String,
+      account: LevelUsage.fromJson(usage['account'] as Map<String, dynamic>),
+      users: (usersPage['items'] as List<dynamic>)
           .map((item) => UserUsage.fromJson(item as Map<String, dynamic>))
           .toList(),
-      accountPlans: _parsePlans(plans['account']),
-      userPlans: _parsePlans(plans['user']),
+      accountPlans: [
+        for (final plan in planItems)
+          if (plan['scope'] == 'account') PlanInfo.fromJson(plan),
+      ],
+      userPlans: [
+        for (final plan in planItems)
+          if (plan['scope'] == 'user') PlanInfo.fromJson(plan),
+      ],
     );
   }
-  static List<PlanInfo> _parsePlans(Object? raw) => (raw as List<dynamic>)
-      .map((item) => PlanInfo.fromJson(item as Map<String, dynamic>))
-      .toList();
 }
