@@ -192,6 +192,14 @@ class FakePlansRepository implements PlansRepository {
   final List<PlanDto> plans = [
     fakePlan(id: 'basic', name: 'Basic', isPredefined: true),
     fakePlan(
+      id: 'pro',
+      scope: 'account',
+      name: 'Pro',
+      monthlyAllowance: 100000,
+      maxPerRequest: 1000,
+      isPredefined: true,
+    ),
+    fakePlan(
       id: 'custom',
       name: 'Custom',
       isPredefined: false,

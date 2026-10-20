@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'api_exception.dart';
+import 'http_client_stub.dart'
+    if (dart.library.html) 'http_client_web.dart' as platform;
 
 const String _apiBase = String.fromEnvironment('API_BASE');
 
 /// The only place that talks HTTP. Browser cookies carry the BFF session.
 class ApiClient {
-  ApiClient({http.Client? client}) : _client = client ?? http.Client();
+  ApiClient({http.Client? client}) : _client = client ?? platform.createHttpClient();
 
   final http.Client _client;
 

@@ -91,6 +91,12 @@ class ScenariosCubit extends Cubit<ScenariosState> {
     return plan;
   }
 
+  /// Avoid false failures when a prior scenario drained the shared account limit.
+  Future<void> _ensureGenerousAccountPlan() async {
+    final pro = await _findPlan('account', 'Pro');
+    await _dashboard.changeAccountPlan(pro.id);
+  }
+
   ScenarioStepResult _step({
     required String label,
     required String expected,
@@ -106,6 +112,7 @@ class ScenariosCubit extends Cubit<ScenariosState> {
   }
 
   Future<List<ScenarioStepResult>> _scenario1() async {
+    await _ensureGenerousAccountPlan();
     final basic = await _findPlan('user', 'Basic');
     final user = await _users.registerUser(
       externalId: 'sc1-${_suffix()}',
@@ -127,6 +134,7 @@ class ScenariosCubit extends Cubit<ScenariosState> {
   }
 
   Future<List<ScenarioStepResult>> _scenario2() async {
+    await _ensureGenerousAccountPlan();
     final basic = await _findPlan('user', 'Basic');
     final user = await _users.registerUser(
       externalId: 'sc2-${_suffix()}',
@@ -203,6 +211,7 @@ class ScenariosCubit extends Cubit<ScenariosState> {
   }
 
   Future<List<ScenarioStepResult>> _scenario4() async {
+    await _ensureGenerousAccountPlan();
     final basic = await _findPlan('user', 'Basic');
     final boostPage = await _plans.listPlans(scope: 'user', limit: 100);
     var boost = boostPage.items.where((p) => p.name == 'Demo Boost').toList();
@@ -250,6 +259,7 @@ class ScenariosCubit extends Cubit<ScenariosState> {
   }
 
   Future<List<ScenarioStepResult>> _scenario5() async {
+    await _ensureGenerousAccountPlan();
     final plan = await _plans.createPlan(
       scope: 'user',
       name: 'Editable ${_suffix()}',
@@ -288,6 +298,7 @@ class ScenariosCubit extends Cubit<ScenariosState> {
   }
 
   Future<List<ScenarioStepResult>> _scenario6() async {
+    await _ensureGenerousAccountPlan();
     final plan = await _plans.createPlan(
       scope: 'user',
       name: 'Shrink ${_suffix()}',
@@ -333,6 +344,7 @@ class ScenariosCubit extends Cubit<ScenariosState> {
   }
 
   Future<List<ScenarioStepResult>> _scenario7() async {
+    await _ensureGenerousAccountPlan();
     final basic = await _findPlan('user', 'Basic');
     final user = await _users.registerUser(
       externalId: 'sc7-${_suffix()}',

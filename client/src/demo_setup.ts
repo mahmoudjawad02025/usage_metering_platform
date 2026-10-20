@@ -53,8 +53,9 @@ async function createDemoAccount(): Promise<{ client: MeteringClient; apiKey: st
   await client.registerUser({ externalId: 'alice', planId: findPlan(plans, 'user', 'Basic').id });
   await client.registerUser({ externalId: 'bob', planId: findPlan(plans, 'user', 'Premium').id });
   await saveState({ apiKey: created.apiKey });
-  console.log(`demo account created: ${created.account.name}`);
-  return { client, apiKey: created.apiKey, account: created.account };
+  const account = await client.getAccount();
+  console.log(`demo account created: ${account.name}`);
+  return { client, apiKey: created.apiKey, account };
 }
 
 async function reuseSavedAccount(): Promise<{

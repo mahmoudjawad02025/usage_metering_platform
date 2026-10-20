@@ -177,7 +177,7 @@ The first build takes a few minutes because it downloads a Flutter image. No `.e
 | Metering service | http://localhost:3000 (health check: `/health`) |
 | PostgreSQL | `localhost:5432` |
 
-Startup order is enforced with health checks: PostgreSQL becomes healthy, then the service (it runs the migrations and creates the predefined plans), then the example application (it creates a demo account, plans and two users).
+Startup order is enforced with health checks: PostgreSQL becomes healthy, then the service (it runs the migrations and creates the predefined plans), then the example application (BFF waits for the service; a demo account is created when you click “Start demo” in the UI).
 
 **Stop and keep the data:** `docker compose down`. **Stop and delete all data:** `docker compose down -v`.
 
@@ -224,7 +224,7 @@ npm run dev                       # http://localhost:3000
 
 ## 🎬 Demo Walkthrough
 
-Open http://localhost:8080. The example application is a simulated document processing app. At startup it uses only the public API to create an account, a tiny custom account plan (100 units per month, 50 per request), and two users: `alice` on **Basic** (1000 per month, 20 per request) and `bob` on **Premium** (10000 per month, 200 per request).
+Open http://localhost:8080 and choose **Start demo**. The example application uses only the public API to create an account, a tiny custom account plan (100 units per month, 50 per request), and two users: `alice` on **Basic** (1000 per month, 20 per request) and `bob` on **Premium** (10000 per month, 200 per request). The API key stays in an httpOnly session cookie on the BFF — never in Flutter code.
 
 | # | Action in the UI | Result |
 | :-- | :-- | :-- |
@@ -444,7 +444,7 @@ Notes on method:
 - The database is **not mocked**. One test injects a fault (the log insert fails after the counters were updated) to prove that a failed request leaves no trace and that the retry then succeeds.
 - A **mutation check** was performed manually during development: removing the row locks from lockCounters made the concurrency tests fail, confirming they really test locking. (The mutation was reverted; it is not part of the repository.)
 - Coverage thresholds enforced by `npm run test:coverage`: lines 95%, statements 93%, functions 90%, branches 85%.
-- The example application has one Flutter test (JSON parsing) and was verified manually with the walkthrough above; its small server has no automated tests.
+- The example application has Flutter Cubit unit tests (auth, consume, plans, scenarios) plus model parsing tests; its BFF has no automated tests.
 
 <br>
 
@@ -502,7 +502,7 @@ Honest limits of these tests: the load generator is closed-loop (fixed connectio
 8. **Default credentials** (admin key, database password) exist for the local demo only.
 9. **Single instance tested.** Correctness relies on database locks and constraints, not on process memory, so multiple instances should behave the same, but the load tests ran against one service instance.
 10. **Migrations are forward-only** (no down migrations).
-11. **Example application.** The demo skips its simulated work on a replayed request, which is a simplification: a real application must keep its own record of finished work. "Reset demo" leaves old demo accounts in the database. The Flutter build loads its rendering engine from a CDN at runtime.
+11. **Example application.** The demo skips its simulated work on a replayed request, which is a simplification: a real application must keep its own record of finished work. Starting a fresh demo leaves old demo accounts in the database. BFF sessions are in-memory and lost on restart. The Flutter build loads its rendering engine from a CDN at runtime.
 12. **Docker images use moving tags** (`stable`, `22-alpine`, `16-alpine`) for simple setup, which trades away exact reproducibility.
 13. **No OpenAPI file.** The API reference is written by hand and protected by contract tests.
 
