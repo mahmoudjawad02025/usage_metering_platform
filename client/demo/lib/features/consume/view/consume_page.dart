@@ -10,9 +10,9 @@ import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/loading_view.dart';
 import '../../../core/widgets/section_title.dart';
+import '../../../core/feature_refresh.dart';
 import '../../auth/auth_cubit.dart';
 import '../consume_cubit.dart';
-import '../consume_repository.dart';
 import '../consume_state.dart';
 
 class ConsumePage extends StatelessWidget {
@@ -20,11 +20,7 @@ class ConsumePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) =>
-          ConsumeCubit(context.read<ConsumeRepository>())..load(),
-      child: const _ConsumeView(),
-    );
+    return const _ConsumeView();
   }
 }
 
@@ -152,6 +148,11 @@ class _ConsumeViewState extends State<_ConsumeView> {
                                     await context
                                         .read<ConsumeCubit>()
                                         .processDocument();
+                                    if (mounted) {
+                                      await refreshAfterConsumeMutation(
+                                        context,
+                                      );
+                                    }
                                   } catch (err) {
                                     _handleError(err);
                                   }
@@ -181,6 +182,11 @@ class _ConsumeViewState extends State<_ConsumeView> {
                                     await context
                                         .read<ConsumeCubit>()
                                         .retryLast();
+                                    if (mounted) {
+                                      await refreshAfterConsumeMutation(
+                                        context,
+                                      );
+                                    }
                                   } catch (err) {
                                     _handleError(err);
                                   }

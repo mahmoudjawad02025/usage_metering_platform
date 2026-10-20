@@ -28,8 +28,9 @@ class ScenariosCubit extends Cubit<ScenariosState> {
   final DashboardRepository _dashboard;
   final _random = Random();
 
-  String _suffix() =>
-      '${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}${_random.nextInt(999)}';
+  // requestId must be unique per attempt; helper users/plans are reused.
+  String _requestId(String prefix) =>
+      '$prefix-${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}${_random.nextInt(999)}';
 
   Future<void> run(int id) async {
     emit(state.withRun(ScenarioRunState(
@@ -73,6 +74,76 @@ class ScenariosCubit extends Cubit<ScenariosState> {
     );
   }
 
+  Future<UserDto?> _findUserByExternalId(String externalId) async {
+    var offset = 0;
+    const limit = 100;
+    for (;;) {
+      final page = await _users.listUsers(limit: limit, offset: offset);
+      for (final user in page.items) {
+        if (user.externalId == externalId) return user;
+      }
+      offset += page.items.length;
+      if (offset >= page.total || page.items.isEmpty) return null;
+    }
+  }
+
+  /// Create once; on conflict look up the existing user and optionally reset plan.
+  Future<UserDto> _ensureUser(String externalId, {String? planId}) async {
+    final existing = await _findUserByExternalId(externalId);
+    if (existing != null) {
+      if (planId != null && existing.plan.id != planId) {
+        return _users.changeUserPlan(existing.id, planId);
+      }
+      return existing;
+    }
+    try {
+      return await _users.registerUser(externalId: externalId, planId: planId);
+    } on ApiException catch (err) {
+      if (err.code != 'CONFLICT') rethrow;
+      final again = await _findUserByExternalId(externalId);
+      if (again == null) rethrow;
+      if (planId != null && again.plan.id != planId) {
+        return _users.changeUserPlan(again.id, planId);
+      }
+      return again;
+    }
+  }
+
+  Future<PlanDto> _ensureCustomPlan({
+    required String scope,
+    required String name,
+    required int monthlyAllowance,
+    required int maxPerRequest,
+  }) async {
+    final page = await _plans.listPlans(scope: scope, limit: 100);
+    final existing = page.items.where((p) => p.name == name).toList();
+    if (existing.isNotEmpty) {
+      final plan = existing.first;
+      return _plans.updatePlan(
+        plan.id,
+        monthlyAllowance: monthlyAllowance,
+        maxPerRequest: maxPerRequest,
+      );
+    }
+    try {
+      return await _plans.createPlan(
+        scope: scope,
+        name: name,
+        monthlyAllowance: monthlyAllowance,
+        maxPerRequest: maxPerRequest,
+      );
+    } on ApiException catch (err) {
+      if (err.code != 'CONFLICT') rethrow;
+      final again = await _plans.listPlans(scope: scope, limit: 100);
+      final plan = again.items.firstWhere((p) => p.name == name);
+      return _plans.updatePlan(
+        plan.id,
+        monthlyAllowance: monthlyAllowance,
+        maxPerRequest: maxPerRequest,
+      );
+    }
+  }
+
   Future<PlanDto> _ensureTinyAccountPlan() async {
     final page = await _plans.listPlans(scope: 'account', limit: 100);
     final existing = page.items.where((p) => p.name == 'Demo Tiny').toList();
@@ -81,9 +152,9 @@ class ScenariosCubit extends Cubit<ScenariosState> {
       await _dashboard.changeAccountPlan(plan.id);
       return plan;
     }
-    final plan = await _plans.createPlan(
+    final plan = await _ensureCustomPlan(
       scope: 'account',
-      name: 'Demo Tiny ${_suffix()}',
+      name: 'Demo Tiny',
       monthlyAllowance: 100,
       maxPerRequest: 50,
     );
@@ -91,7 +162,8 @@ class ScenariosCubit extends Cubit<ScenariosState> {
     return plan;
   }
 
-  /// Avoid false failures when a prior scenario drained the shared account limit.
+  // Scenario 3 may leave the account on Demo Tiny with no remaining units;
+  // switch to Pro so later scenarios aren't rejected for the wrong reason.
   Future<void> _ensureGenerousAccountPlan() async {
     final pro = await _findPlan('account', 'Pro');
     await _dashboard.changeAccountPlan(pro.id);
@@ -114,14 +186,11 @@ class ScenariosCubit extends Cubit<ScenariosState> {
   Future<List<ScenarioStepResult>> _scenario1() async {
     await _ensureGenerousAccountPlan();
     final basic = await _findPlan('user', 'Basic');
-    final user = await _users.registerUser(
-      externalId: 'sc1-${_suffix()}',
-      planId: basic.id,
-    );
+    final user = await _ensureUser('scenario-1', planId: basic.id);
     final result = await _consume.consume(
       userId: user.id,
       units: 10,
-      requestId: 'sc1-${_suffix()}',
+      requestId: _requestId('sc1'),
     );
     return [
       _step(
@@ -136,14 +205,11 @@ class ScenariosCubit extends Cubit<ScenariosState> {
   Future<List<ScenarioStepResult>> _scenario2() async {
     await _ensureGenerousAccountPlan();
     final basic = await _findPlan('user', 'Basic');
-    final user = await _users.registerUser(
-      externalId: 'sc2-${_suffix()}',
-      planId: basic.id,
-    );
+    final user = await _ensureUser('scenario-2', planId: basic.id);
     final result = await _consume.consume(
       userId: user.id,
       units: 25,
-      requestId: 'sc2-${_suffix()}',
+      requestId: _requestId('sc2'),
     );
     final rejection = result.rejection;
     final passed = !result.accepted &&
@@ -172,19 +238,16 @@ class ScenariosCubit extends Cubit<ScenariosState> {
     ));
 
     final premium = await _findPlan('user', 'Premium');
-    final user = await _users.registerUser(
-      externalId: 'sc3-${_suffix()}',
-      planId: premium.id,
-    );
+    final user = await _ensureUser('scenario-3', planId: premium.id);
 
-    // Drain account allowance with large accepted chunks under account maxPerRequest.
     var remaining = (await _dashboard.getUsage()).account.remaining;
     while (remaining > 0) {
-      final units = remaining > tiny.maxPerRequest ? tiny.maxPerRequest : remaining;
+      final units =
+          remaining > tiny.maxPerRequest ? tiny.maxPerRequest : remaining;
       final drain = await _consume.consume(
         userId: user.id,
         units: units,
-        requestId: 'sc3-drain-${_suffix()}',
+        requestId: _requestId('sc3d'),
       );
       if (!drain.accepted) break;
       remaining = drain.account.remaining;
@@ -193,7 +256,7 @@ class ScenariosCubit extends Cubit<ScenariosState> {
     final result = await _consume.consume(
       userId: user.id,
       units: 1,
-      requestId: 'sc3-${_suffix()}',
+      requestId: _requestId('sc3'),
     );
     final rejection = result.rejection;
     final passed = !result.accepted &&
@@ -213,34 +276,29 @@ class ScenariosCubit extends Cubit<ScenariosState> {
   Future<List<ScenarioStepResult>> _scenario4() async {
     await _ensureGenerousAccountPlan();
     final basic = await _findPlan('user', 'Basic');
-    final boostPage = await _plans.listPlans(scope: 'user', limit: 100);
-    var boost = boostPage.items.where((p) => p.name == 'Demo Boost').toList();
-    late PlanDto boostPlan;
-    if (boost.isEmpty) {
-      boostPlan = await _plans.createPlan(
+    PlanDto boostPlan;
+    try {
+      boostPlan = await _findPlan('user', 'Demo Boost');
+    } catch (_) {
+      boostPlan = await _ensureCustomPlan(
         scope: 'user',
-        name: 'Demo Boost ${_suffix()}',
+        name: 'Demo Boost',
         monthlyAllowance: 1000,
         maxPerRequest: 100,
       );
-    } else {
-      boostPlan = boost.first;
     }
 
-    final user = await _users.registerUser(
-      externalId: 'sc4-${_suffix()}',
-      planId: basic.id,
-    );
+    final user = await _ensureUser('scenario-4', planId: basic.id);
     final first = await _consume.consume(
       userId: user.id,
       units: 25,
-      requestId: 'sc4-a-${_suffix()}',
+      requestId: _requestId('sc4a'),
     );
     await _users.changeUserPlan(user.id, boostPlan.id);
     final second = await _consume.consume(
       userId: user.id,
       units: 25,
-      requestId: 'sc4-b-${_suffix()}',
+      requestId: _requestId('sc4b'),
     );
     return [
       _step(
@@ -260,26 +318,23 @@ class ScenariosCubit extends Cubit<ScenariosState> {
 
   Future<List<ScenarioStepResult>> _scenario5() async {
     await _ensureGenerousAccountPlan();
-    final plan = await _plans.createPlan(
+    final plan = await _ensureCustomPlan(
       scope: 'user',
-      name: 'Editable ${_suffix()}',
-      monthlyAllowance: 500,
+      name: 'Scenario Editable',
+      monthlyAllowance: 5000,
       maxPerRequest: 10,
     );
-    final user = await _users.registerUser(
-      externalId: 'sc5-${_suffix()}',
-      planId: plan.id,
-    );
+    final user = await _ensureUser('scenario-5', planId: plan.id);
     final first = await _consume.consume(
       userId: user.id,
       units: 20,
-      requestId: 'sc5-a-${_suffix()}',
+      requestId: _requestId('sc5a'),
     );
     await _plans.updatePlan(plan.id, maxPerRequest: 50);
     final second = await _consume.consume(
       userId: user.id,
       units: 20,
-      requestId: 'sc5-b-${_suffix()}',
+      requestId: _requestId('sc5b'),
     );
     return [
       _step(
@@ -299,37 +354,39 @@ class ScenariosCubit extends Cubit<ScenariosState> {
 
   Future<List<ScenarioStepResult>> _scenario6() async {
     await _ensureGenerousAccountPlan();
-    final plan = await _plans.createPlan(
+    final userProbe = await _ensureUser('scenario-6');
+    final usageBefore = await _users.getUserUsage(userProbe.id);
+    final consumed = usageBefore.user.usage.consumed;
+    // Reused user may already have usage; raise allowance so we still have +50 headroom.
+    final plan = await _ensureCustomPlan(
       scope: 'user',
-      name: 'Shrink ${_suffix()}',
-      monthlyAllowance: 50,
+      name: 'Scenario Shrink',
+      monthlyAllowance: consumed + 50,
       maxPerRequest: 50,
     );
-    final user = await _users.registerUser(
-      externalId: 'sc6-${_suffix()}',
-      planId: plan.id,
-    );
+    final user = await _ensureUser('scenario-6', planId: plan.id);
     final first = await _consume.consume(
       userId: user.id,
       units: 40,
-      requestId: 'sc6-a-${_suffix()}',
+      requestId: _requestId('sc6a'),
     );
-    await _plans.updatePlan(plan.id, monthlyAllowance: 10);
+    final afterFirst = first.user.consumed;
+    await _plans.updatePlan(plan.id, monthlyAllowance: afterFirst);
     final usage = await _users.getUserUsage(user.id);
     final second = await _consume.consume(
       userId: user.id,
       units: 1,
-      requestId: 'sc6-b-${_suffix()}',
+      requestId: _requestId('sc6b'),
     );
     return [
       _step(
-        label: 'Consume 40 of 50',
+        label: 'Consume 40 with headroom',
         expected: 'accepted',
         actual: first.accepted ? 'accepted' : 'rejected',
         passed: first.accepted,
       ),
       _step(
-        label: 'After lowering allowance to 10',
+        label: 'After lowering allowance to current usage',
         expected: 'remaining=0',
         actual: 'remaining=${usage.user.usage.remaining}',
         passed: usage.user.usage.remaining == 0,
@@ -346,11 +403,8 @@ class ScenariosCubit extends Cubit<ScenariosState> {
   Future<List<ScenarioStepResult>> _scenario7() async {
     await _ensureGenerousAccountPlan();
     final basic = await _findPlan('user', 'Basic');
-    final user = await _users.registerUser(
-      externalId: 'sc7-${_suffix()}',
-      planId: basic.id,
-    );
-    final requestId = 'sc7-${_suffix()}';
+    final user = await _ensureUser('scenario-7', planId: basic.id);
+    final requestId = _requestId('sc7');
     final first = await _consume.consume(
       userId: user.id,
       units: 5,
@@ -377,16 +431,16 @@ class ScenariosCubit extends Cubit<ScenariosState> {
       _step(
         label: 'First consume',
         expected: 'accepted, counted',
-        actual:
-            'accepted=${first.accepted}, consumed=${first.user.consumed}',
-        passed: first.accepted && !first.replayed && first.user.consumed == 5,
+        actual: 'accepted=${first.accepted}, replayed=${first.replayed}',
+        passed: first.accepted && !first.replayed,
       ),
       _step(
         label: 'Retry same requestId',
-        expected: 'replayed=true, consumed still 5',
+        expected: 'replayed=true, same consumed',
         actual:
             'replayed=${second.replayed}, consumed=${second.user.consumed}',
-        passed: second.replayed && second.user.consumed == 5,
+        passed:
+            second.replayed && second.user.consumed == first.user.consumed,
       ),
       _step(
         label: 'Same requestId, different units',

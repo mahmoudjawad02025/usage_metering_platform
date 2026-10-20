@@ -1,23 +1,76 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'core/feature_refresh.dart';
 import 'core/layout.dart';
 import 'features/auth/auth_cubit.dart';
+import 'features/consume/consume_cubit.dart';
+import 'features/consume/consume_repository.dart';
 import 'features/consume/view/consume_page.dart';
+import 'features/dashboard/dashboard_cubit.dart';
+import 'features/dashboard/dashboard_repository.dart';
 import 'features/dashboard/view/dashboard_page.dart';
+import 'features/history/history_cubit.dart';
+import 'features/history/history_repository.dart';
 import 'features/history/view/history_page.dart';
+import 'features/plans/plans_cubit.dart';
+import 'features/plans/plans_repository.dart';
 import 'features/plans/view/plans_page.dart';
+import 'features/scenarios/scenarios_cubit.dart';
 import 'features/scenarios/view/scenarios_page.dart';
+import 'features/users/users_cubit.dart';
+import 'features/users/users_repository.dart';
 import 'features/users/view/users_page.dart';
 
-class AppShell extends StatefulWidget {
+class AppShell extends StatelessWidget {
   const AppShell({super.key});
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  Widget build(BuildContext context) {
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(
+          create: (context) =>
+              DashboardCubit(context.read<DashboardRepository>())..load(),
+        ),
+        BlocProvider(
+          create: (context) =>
+              UsersCubit(context.read<UsersRepository>())..load(),
+        ),
+        BlocProvider(
+          create: (context) =>
+              PlansCubit(context.read<PlansRepository>())..load(),
+        ),
+        BlocProvider(
+          create: (context) =>
+              ConsumeCubit(context.read<ConsumeRepository>())..load(),
+        ),
+        BlocProvider(
+          create: (context) =>
+              HistoryCubit(context.read<HistoryRepository>())..load(),
+        ),
+        BlocProvider(
+          create: (context) => ScenariosCubit(
+            users: context.read<UsersRepository>(),
+            plans: context.read<PlansRepository>(),
+            consume: context.read<ConsumeRepository>(),
+            dashboard: context.read<DashboardRepository>(),
+          ),
+        ),
+      ],
+      child: const _AppShellBody(),
+    );
+  }
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellBody extends StatefulWidget {
+  const _AppShellBody();
+
+  @override
+  State<_AppShellBody> createState() => _AppShellBodyState();
+}
+
+class _AppShellBodyState extends State<_AppShellBody> {
   int _index = 0;
 
   static const _destinations = [
@@ -29,11 +82,20 @@ class _AppShellState extends State<AppShell> {
     (icon: Icons.science_outlined, label: 'Scenarios'),
   ];
 
+  Future<void> _selectTab(int value) async {
+    setState(() => _index = value);
+    try {
+      await refreshTab(context, value);
+    } catch (_) {
+      // Page banners show load errors from the cubit.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final accountName =
         context.watch<AuthCubit>().state.accountName ?? 'Account';
-    final pages = const [
+    const pages = [
       DashboardPage(),
       UsersPage(),
       PlansPage(),
@@ -60,7 +122,7 @@ class _AppShellState extends State<AppShell> {
           children: [
             NavigationRail(
               selectedIndex: _index,
-              onDestinationSelected: (value) => setState(() => _index = value),
+              onDestinationSelected: _selectTab,
               labelType: NavigationRailLabelType.all,
               destinations: [
                 for (final dest in _destinations)
@@ -91,7 +153,7 @@ class _AppShellState extends State<AppShell> {
       body: body,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
+        onDestinationSelected: _selectTab,
         destinations: [
           for (final dest in _destinations)
             NavigationDestination(icon: Icon(dest.icon), label: dest.label),

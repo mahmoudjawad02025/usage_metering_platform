@@ -12,9 +12,9 @@ import '../../../core/widgets/month_picker.dart';
 import '../../../core/widgets/plan_chip.dart';
 import '../../../core/widgets/section_title.dart';
 import '../../../core/widgets/usage_bar.dart';
+import '../../../core/feature_refresh.dart';
 import '../../auth/auth_cubit.dart';
 import '../dashboard_cubit.dart';
-import '../dashboard_repository.dart';
 import '../dashboard_state.dart';
 
 class DashboardPage extends StatelessWidget {
@@ -22,11 +22,7 @@ class DashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) =>
-          DashboardCubit(context.read<DashboardRepository>())..load(),
-      child: const _DashboardView(),
-    );
+    return const _DashboardView();
   }
 }
 
@@ -41,10 +37,7 @@ class _DashboardView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<DashboardCubit, DashboardState>(
-      listener: (context, state) {
-        // Errors are shown in the banner; 401 handled via catch in cubit callers.
-      },
+    return BlocBuilder<DashboardCubit, DashboardState>(
       builder: (context, state) {
         if (state.status == DashboardStatus.initial ||
             (state.status == DashboardStatus.loading && state.account == null)) {
@@ -138,6 +131,9 @@ class _DashboardView extends StatelessWidget {
                                     await context
                                         .read<DashboardCubit>()
                                         .changeAccountPlan(planId);
+                                    if (context.mounted) {
+                                      await refreshAfterUsersMutation(context);
+                                    }
                                   } catch (err) {
                                     _handleError(context, err);
                                   }

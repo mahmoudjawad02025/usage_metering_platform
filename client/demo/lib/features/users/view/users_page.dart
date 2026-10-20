@@ -13,9 +13,9 @@ import '../../../core/widgets/pagination_bar.dart';
 import '../../../core/widgets/plan_chip.dart';
 import '../../../core/widgets/section_title.dart';
 import '../../../core/widgets/usage_bar.dart';
+import '../../../core/feature_refresh.dart';
 import '../../auth/auth_cubit.dart';
 import '../users_cubit.dart';
-import '../users_repository.dart';
 import '../users_state.dart';
 
 class UsersPage extends StatelessWidget {
@@ -23,10 +23,7 @@ class UsersPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => UsersCubit(context.read<UsersRepository>())..load(),
-      child: const _UsersView(),
-    );
+    return const _UsersView();
   }
 }
 
@@ -131,6 +128,9 @@ class _UsersViewState extends State<_UsersView> {
                                       planId: _registerPlanId,
                                     );
                                 _externalIdController.clear();
+                                if (mounted) {
+                                  await refreshAfterUsersMutation(context);
+                                }
                               } catch (err) {
                                 _handleError(err);
                               }
@@ -241,6 +241,9 @@ class _UsersViewState extends State<_UsersView> {
                                   state.selectedUser!.id,
                                   planId,
                                 );
+                            if (mounted) {
+                              await refreshAfterUsersMutation(context);
+                            }
                           } catch (err) {
                             _handleError(err);
                           }

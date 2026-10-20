@@ -13,7 +13,6 @@ import '../../../core/widgets/pagination_bar.dart';
 import '../../../core/widgets/section_title.dart';
 import '../../auth/auth_cubit.dart';
 import '../history_cubit.dart';
-import '../history_repository.dart';
 import '../history_state.dart';
 
 class HistoryPage extends StatelessWidget {
@@ -21,11 +20,7 @@ class HistoryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) =>
-          HistoryCubit(context.read<HistoryRepository>())..load(),
-      child: const _HistoryView(),
-    );
+    return const _HistoryView();
   }
 }
 

@@ -8,9 +8,17 @@ import { createPlansRouter } from './routes/plans.routes';
 import { createUsageRouter } from './routes/usage.routes';
 import { createUsersRouter } from './routes/users.routes';
 
+/** Allow fixed CORS_ORIGIN and/or any http://localhost:<port> (Flutter web debug). */
 const allowDevelopmentCors: RequestHandler = (req, res, next) => {
-  res.setHeader('access-control-allow-origin', config.CORS_ORIGIN ?? '');
-  res.setHeader('access-control-allow-credentials', 'true');
+  const origin = req.headers.origin;
+  const allowed =
+    (config.CORS_ORIGIN && origin === config.CORS_ORIGIN) ||
+    (typeof origin === 'string' && /^http:\/\/localhost:\d+$/.test(origin));
+  if (allowed && origin) {
+    res.setHeader('access-control-allow-origin', origin);
+    res.setHeader('access-control-allow-credentials', 'true');
+    res.setHeader('vary', 'Origin');
+  }
   res.setHeader('access-control-allow-methods', 'GET,POST,PUT,PATCH,OPTIONS');
   res.setHeader('access-control-allow-headers', 'content-type');
   if (req.method === 'OPTIONS') {
@@ -23,7 +31,7 @@ const allowDevelopmentCors: RequestHandler = (req, res, next) => {
 export function createApp(): Express {
   const app = express();
   app.use(express.json({ limit: '10kb' }));
-  if (config.CORS_ORIGIN) app.use(allowDevelopmentCors);
+  app.use(allowDevelopmentCors);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });

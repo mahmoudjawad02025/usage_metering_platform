@@ -9,16 +9,19 @@ class UsageBar extends StatelessWidget {
     required this.label,
     required this.usage,
     this.dense = false,
+    this.labelColor,
   });
 
   final String label;
   final LevelUsage usage;
   final bool dense;
+  final Color? labelColor;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final limit = usage.plan.monthlyAllowance;
+    final color = labelColor;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -27,15 +30,16 @@ class UsageBar extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: dense
-                    ? theme.textTheme.bodyMedium
-                    : theme.textTheme.titleSmall,
+                style: (dense
+                        ? theme.textTheme.bodyMedium
+                        : theme.textTheme.titleSmall)
+                    ?.copyWith(color: color),
               ),
             ),
             Text(
               '${usage.consumed} used · ${usage.remaining} left'
               '${limit > 0 ? ' / $limit' : ''}',
-              style: theme.textTheme.bodySmall,
+              style: theme.textTheme.bodySmall?.copyWith(color: color),
             ),
           ],
         ),

@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/feature_refresh.dart';
 import '../../../core/layout.dart';
 import '../../../core/theme.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/section_title.dart';
-import '../../consume/consume_repository.dart';
-import '../../dashboard/dashboard_repository.dart';
-import '../../plans/plans_repository.dart';
-import '../../users/users_repository.dart';
 import '../scenarios_cubit.dart';
 import '../scenarios_state.dart';
 
@@ -18,13 +15,22 @@ class ScenariosPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => ScenariosCubit(
-        users: context.read<UsersRepository>(),
-        plans: context.read<PlansRepository>(),
-        consume: context.read<ConsumeRepository>(),
-        dashboard: context.read<DashboardRepository>(),
-      ),
+    return BlocListener<ScenariosCubit, ScenariosState>(
+      listenWhen: (previous, current) {
+        for (final def in scenarioDefinitions) {
+          final before = previous.runFor(def.id).status;
+          final after = current.runFor(def.id).status;
+          if (before == ScenarioStatus.running &&
+              (after == ScenarioStatus.success ||
+                  after == ScenarioStatus.failure)) {
+            return true;
+          }
+        }
+        return false;
+      },
+      listener: (context, state) {
+        refreshAfterScenarioRun(context);
+      },
       child: const _ScenariosView(),
     );
   }
@@ -42,7 +48,9 @@ class _ScenariosView extends StatelessWidget {
             'Scenarios',
             subtitle:
                 'Guided scripts that exercise the metering rules on your signed-in account. '
-                'Each run creates uniquely named helper users/plans so you can re-run safely.',
+                'Each scenario reuses stable helper users/plans (scenario-1, …) so re-runs '
+                'do not flood the database. History rows still accumulate; wipe with '
+                'docker compose down -v when you want a clean slate.',
           ),
           const SizedBox(height: AppSpacing.md),
           for (final def in scenarioDefinitions) ...[

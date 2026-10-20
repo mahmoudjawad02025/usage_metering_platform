@@ -12,9 +12,9 @@ import '../../../core/widgets/loading_view.dart';
 import '../../../core/widgets/pagination_bar.dart';
 import '../../../core/widgets/plan_chip.dart';
 import '../../../core/widgets/section_title.dart';
+import '../../../core/feature_refresh.dart';
 import '../../auth/auth_cubit.dart';
 import '../plans_cubit.dart';
-import '../plans_repository.dart';
 import '../plans_state.dart';
 
 class PlansPage extends StatelessWidget {
@@ -22,10 +22,7 @@ class PlansPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => PlansCubit(context.read<PlansRepository>())..load(),
-      child: const _PlansView(),
-    );
+    return const _PlansView();
   }
 }
 
@@ -122,6 +119,7 @@ class _PlansViewState extends State<_PlansView> {
             monthlyAllowance: int.parse(monthlyController.text.trim()),
             maxPerRequest: int.parse(maxController.text.trim()),
           );
+      if (mounted) await refreshAfterPlansMutation(context);
     } catch (err) {
       _handleError(err);
     }
@@ -278,6 +276,9 @@ class _PlansViewState extends State<_PlansView> {
                                       maxPerRequest: max,
                                     );
                                 _nameController.clear();
+                                if (mounted) {
+                                  await refreshAfterPlansMutation(context);
+                                }
                               } catch (err) {
                                 _handleError(err);
                               }

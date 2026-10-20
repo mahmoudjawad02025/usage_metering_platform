@@ -27,42 +27,77 @@ class DecisionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final accepted = result.accepted;
-    final color = accepted ? Colors.green : Colors.red;
+    final statusColor = accepted ? scheme.primary : scheme.error;
     final who = userName ?? 'user';
     final title = accepted
         ? 'Accepted: ${result.units} units for $who'
         : 'Rejected: ${result.units} units for $who';
 
     return AppCard(
-      color: color.shade50,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
                 accepted ? Icons.check_circle : Icons.cancel,
-                color: color.shade700,
+                color: statusColor,
+                size: 28,
               ),
-              const SizedBox(width: AppSpacing.xs),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
+                        color: scheme.onSurface,
                       ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _message(),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              if (result.replayed) const Chip(label: Text('replayed')),
+              if (result.replayed) ...[
+                const SizedBox(width: AppSpacing.xs),
+                Chip(
+                  label: const Text('replayed'),
+                  visualDensity: VisualDensity.compact,
+                  side: BorderSide(color: scheme.outlineVariant),
+                  backgroundColor: scheme.surfaceContainerHighest,
+                  labelStyle: theme.textTheme.labelMedium?.copyWith(
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(_message()),
-          const Divider(height: 24),
-          UsageBar(label: 'Account (${result.account.plan.name})', usage: result.account, dense: true),
+          const SizedBox(height: AppSpacing.md),
+          Divider(height: 1, color: scheme.outlineVariant),
+          const SizedBox(height: AppSpacing.md),
+          UsageBar(
+            label: 'Account (${result.account.plan.name})',
+            usage: result.account,
+            dense: true,
+          ),
           const SizedBox(height: AppSpacing.sm),
-          UsageBar(label: 'User (${result.user.plan.name})', usage: result.user, dense: true),
+          UsageBar(
+            label: 'User (${result.user.plan.name})',
+            usage: result.user,
+            dense: true,
+          ),
         ],
       ),
     );
