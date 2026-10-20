@@ -41,8 +41,14 @@ services:
     build:
       context: ./client
     container_name: usage_metering_client
+    environment:
+      SERVICE_URL: http://service:3000
+      ADMIN_KEY: ${ADMIN_KEY:-change_me_to_a_long_random_admin_key}
+      CLIENT_PORT: 8080
     ports:
       - "${CLIENT_PORT:-8080}:8080"
+    volumes:
+      - client_data:/data
     depends_on:
       service:
         condition: service_healthy
@@ -54,3 +60,4 @@ services:
       start_period: 10s
 volumes:
   postgres_data:
+  client_data:

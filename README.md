@@ -45,7 +45,7 @@ The repository contains three parts:
 | Part | Folder | What it is |
 | :-- | :-- | :-- |
 | Metering service | [`service/`](service) | The backend: accounts, users, plans, consume, usage, history. TypeScript, Express 5, PostgreSQL. |
-| Example application | [`client/`](client) | A small "document processing" Flutter web UI served by nginx (proxies `/svc` to the service). See [`client/README.md`](client/README.md). |
+| Example application | [`client/`](client) | A small "document processing" app: a Flutter web UI plus a tiny server that holds the API key. See [`client/README.md`](client/README.md). |
 | Load tests | [`perf/`](perf) | autocannon scenarios that verify correctness with SQL after every run. See [`docs/performance.md`](docs/performance.md). |
 
 <br>
@@ -108,7 +108,7 @@ Everything in the assignment brief is implemented:
 | Validation | Zod |
 | Logging | pino |
 | Tests | Vitest, Supertest, real PostgreSQL |
-| Example application | Flutter web (static UI served by nginx) |
+| Example application | Flutter web (UI) and a small Express server (holds the API key) |
 | Load tests | autocannon, driven from TypeScript |
 | Packaging | Docker multi-stage builds, Docker Compose |
 
@@ -124,8 +124,8 @@ Everything in the assignment brief is implemented:
 
 ```mermaid
 flowchart LR
-  Browser["Flutter web app"] -->|"/svc (same origin)"| Nginx["nginx"]
-  Nginx -->|"proxy"| Service["Metering service"]
+  Browser["Flutter web app"] -->|"/api (same origin)"| Demo["Demo server<br/>holds the API key"]
+  Demo -->|"x-api-key"| Service["Metering service"]
   Service --> DB[("PostgreSQL")]
 ```
 
@@ -177,7 +177,7 @@ The first build takes a few minutes because it downloads a Flutter image. No `.e
 | Metering service | http://localhost:3000 (health check: `/health`) |
 | PostgreSQL | `localhost:5432` |
 
-Startup order is enforced with health checks: PostgreSQL becomes healthy, then the service (it runs the migrations and creates the predefined plans), then the example application (static UI). Click **Create demo account** in the UI to provision the demo data through the public API.
+Startup order is enforced with health checks: PostgreSQL becomes healthy, then the service (it runs the migrations and creates the predefined plans), then the example application (it creates a demo account, plans and two users).
 
 **Stop and keep the data:** `docker compose down`. **Stop and delete all data:** `docker compose down -v`.
 
@@ -196,7 +196,7 @@ curl -s -X POST http://localhost:3000/accounts \
 
 | Variable | Used by | Default | Meaning |
 | :-- | :-- | :-- | :-- |
-| `ADMIN_KEY` | service | `change_me_to_a_long_random_admin_key` | Static key that is allowed to create accounts (at least 16 characters); typed once in the demo UI |
+| `ADMIN_KEY` | service, example app | `change_me_to_a_long_random_admin_key` | Static key that is allowed to create accounts (at least 16 characters) |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | PostgreSQL, service | `usage_metering`, `usage_metering_password`, `usage_metering_service` | Database credentials |
 | `DB_POOL_MAX` | service | `10` | Maximum database connections of the service |
 | `LOG_LEVEL` | service | `info` | pino log level |
@@ -224,11 +224,10 @@ npm run dev                       # http://localhost:3000
 
 ## 🎬 Demo Walkthrough
 
-Open http://localhost:8080. The example application is a simulated document processing app. Click **Create demo account** (admin key; default matches `.env.example`). That uses only the public API to create an account, a tiny custom account plan (100 units per month, 50 per request), and two users: `alice` on **Basic** (1000 per month, 20 per request) and `bob` on **Premium** (10000 per month, 200 per request).
+Open http://localhost:8080. The example application is a simulated document processing app. At startup it uses only the public API to create an account, a tiny custom account plan (100 units per month, 50 per request), and two users: `alice` on **Basic** (1000 per month, 20 per request) and `bob` on **Premium** (10000 per month, 200 per request).
 
 | # | Action in the UI | Result |
 | :-- | :-- | :-- |
-| 0 | Create demo account | Account, plans, and users are ready; API key stays in the browser. |
 | 1 | alice, 10 units | Accepted. alice 10 used, 990 remaining. Account 10 used, 90 remaining. |
 | 2 | alice, 25 units | Rejected by the **user's** per-request limit (Basic allows 20). Nothing consumed. |
 | 3 | bob, 50 units | Accepted. Account 60 used, 40 remaining. |
@@ -237,7 +236,7 @@ Open http://localhost:8080. The example application is a simulated document proc
 | 6 | Switch the account to **Pro**, then bob, 50 units | Accepted. |
 | 7 | "Retry last request" | The stored decision comes back with `replayed: true`; no unit is counted twice. |
 
-Steps 5 and 6 change what users can do **without any change to the client code**: the client only lists the plans the service returns and lets you assign them. For this local demo the API key is kept in the browser (localStorage); a real application would call the service from its backend. Details: [`client/README.md`](client/README.md).
+Steps 5 and 6 change what users can do **without any change to the client code**: the client only lists the plans the service returns and lets you assign them. The API key never reaches the browser; it lives in the small demo server (that is why the example has a server next to the Flutter app). Details: [`client/README.md`](client/README.md).
 
 <br>
 
@@ -445,7 +444,7 @@ Notes on method:
 - The database is **not mocked**. One test injects a fault (the log insert fails after the counters were updated) to prove that a failed request leaves no trace and that the retry then succeeds.
 - A **mutation check** was performed manually during development: removing the row locks from lockCounters made the concurrency tests fail, confirming they really test locking. (The mutation was reverted; it is not part of the repository.)
 - Coverage thresholds enforced by `npm run test:coverage`: lines 95%, statements 93%, functions 90%, branches 85%.
-- The example application has Flutter model tests and was verified manually with the walkthrough above.
+- The example application has one Flutter test (JSON parsing) and was verified manually with the walkthrough above; its small server has no automated tests.
 
 <br>
 
@@ -503,7 +502,7 @@ Honest limits of these tests: the load generator is closed-loop (fixed connectio
 8. **Default credentials** (admin key, database password) exist for the local demo only.
 9. **Single instance tested.** Correctness relies on database locks and constraints, not on process memory, so multiple instances should behave the same, but the load tests ran against one service instance.
 10. **Migrations are forward-only** (no down migrations).
-11. **Example application.** The example keeps its API key in browser localStorage (demo only); the demo skips its simulated work on a replayed request; the Flutter build loads its engine from a CDN.
+11. **Example application.** The demo skips its simulated work on a replayed request, which is a simplification: a real application must keep its own record of finished work. "Reset demo" leaves old demo accounts in the database. The Flutter build loads its rendering engine from a CDN at runtime.
 12. **Docker images use moving tags** (`stable`, `22-alpine`, `16-alpine`) for simple setup, which trades away exact reproducibility.
 13. **No OpenAPI file.** The API reference is written by hand and protected by contract tests.
 
@@ -555,8 +554,8 @@ usage_metering_platform/
 │   └── tests/                  # unit and integration tests, helpers
 ├── client/                     # example application
 │   ├── Dockerfile
-│   ├── nginx.conf              # serves the UI and proxies /svc to the service
-│   └── demo/                   # Flutter web UI
+│   ├── src/                    # demo server: holds the API key, calls the service
+│   └── demo/                # Flutter web UI
 └── perf/                       # load tests
     ├── scripts/                # scenarios, seeding, invariant verification
     └── results/                # committed result files and summary
