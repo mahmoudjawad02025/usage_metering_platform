@@ -38,6 +38,7 @@ export function createApiRouter(session: DemoSession): Router {
       units: body.units,
       requestId: body.requestId ?? randomUUID(),
     });
+    // App policy: only newly accepted units count as processing (not metering's job).
     const processed = decision.accepted && !decision.replayed;
     if (processed) await sleep(PROCESSING_TIME_MS);
     res.json({ processed, decision });

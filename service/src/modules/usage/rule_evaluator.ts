@@ -14,9 +14,11 @@ import type {
   }
   
   export function remainingUnits(state: LevelState): number {
+    // Clamp at 0 when a plan edit lowers the allowance below already-consumed usage.
     return Math.max(0, state.monthlyAllowance - state.consumed);
   }
-  
+
+  // Array order is precedence: per-request limits before monthly (matches the brief's 25-unit example).
   const RULE_CHECKS: readonly RuleCheck[] = [
     {
       rule: 'max_per_request',

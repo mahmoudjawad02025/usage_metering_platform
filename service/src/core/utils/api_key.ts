@@ -8,6 +8,7 @@ export function generateApiKey(): string {
 }
 
 export function hashApiKey(apiKey: string): string {
+  // SHA-256 is enough: keys are 256-bit random. bcrypt would also block indexed lookup by hash.
   return createHash('sha256').update(apiKey).digest('hex');
 }
 
@@ -16,6 +17,7 @@ export function looksLikeApiKey(value: string): boolean {
 }
 
 export function secretsMatch(provided: string, expected: string): boolean {
+  // Hash both sides so lengths match, then compare in constant time (avoids timing leaks).
   const providedDigest = createHash('sha256').update(provided).digest();
   const expectedDigest = createHash('sha256').update(expected).digest();
   return timingSafeEqual(providedDigest, expectedDigest);

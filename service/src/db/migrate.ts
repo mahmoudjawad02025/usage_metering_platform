@@ -16,8 +16,10 @@ export async function runMigrations(options: MigrationOptions = {}): Promise<voi
   const database = options.pool ?? pool;
   const directory = options.directory ?? DEFAULT_MIGRATIONS_DIR;
 
+  // One client for the whole run: advisory locks are per-connection.
   const client = await database.connect();
   try {
+    // Only one instance applies migrations at a time.
     await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_ID]);
 
     await client.query(`

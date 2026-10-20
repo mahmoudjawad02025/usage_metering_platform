@@ -11,6 +11,7 @@ CREATE TABLE plans (
   CONSTRAINT plans_owner_matches_predefined CHECK (
     (is_predefined AND account_id IS NULL) OR (NOT is_predefined AND account_id IS NOT NULL)
   ),
+  -- NULLS NOT DISTINCT: predefined plans have NULL owner and must still be unique by scope+name.
   CONSTRAINT plans_unique_name_per_owner_and_scope
     UNIQUE NULLS NOT DISTINCT (account_id, scope, name)
 );

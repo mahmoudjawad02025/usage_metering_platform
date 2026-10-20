@@ -32,6 +32,7 @@ export function validate(schemas: ValidationSchemas): RequestHandler {
     if (schemas.query) {
       const result = schemas.query.safeParse(req.query);
       if (!result.success) throw new ValidationError('Invalid query string', formatIssues(result.error.issues));
+      // Express 5 exposes req.query as a read-only getter; assign via defineProperty.
       Object.defineProperty(req, 'query', {
         value: result.data,
         writable: true,

@@ -103,6 +103,7 @@ export async function userBelongsToAccount(
 }
 
 async function lockAccountCounter(client: PoolClient, accountId: string, period: string): Promise<number> {
+  // Lock an existing row first; insert only when the period is new (avoids an insert round trip in the steady state).
   const select = 'SELECT consumed FROM account_usage WHERE account_id = $1 AND period = $2 FOR UPDATE';
 
   const first = await client.query<{ consumed: number }>(select, [accountId, period]);
@@ -120,6 +121,7 @@ async function lockAccountCounter(client: PoolClient, accountId: string, period:
 }
 
 async function lockUserCounter(client: PoolClient, userId: string, period: string): Promise<number> {
+  // Same lock-then-insert pattern as the account counter.
   const select = 'SELECT consumed FROM user_usage WHERE user_id = $1 AND period = $2 FOR UPDATE';
 
   const first = await client.query<{ consumed: number }>(select, [userId, period]);
@@ -142,6 +144,7 @@ export async function lockCounters(
   userId: string,
   period: string,
 ): Promise<Counters> {
+  // Always lock account before user. Opposite order across transactions can deadlock.
   const accountConsumed = await lockAccountCounter(client, accountId, period);
   const userConsumed = await lockUserCounter(client, userId, period);
   return { accountConsumed, userConsumed };
@@ -167,6 +170,8 @@ export async function incrementCounters(
   period: string,
   units: number,
 ): Promise<void> {
+  // Increment in SQL so we never read-modify-write in app code (no lost updates).
+  // Both rows are already locked, so combining the updates in one statement is safe.
   await client.query(
     `WITH account_update AS (
        UPDATE account_usage SET consumed = consumed + $3 WHERE account_id = $1 AND period = $2

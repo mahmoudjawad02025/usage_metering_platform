@@ -110,6 +110,7 @@ export async function verifyInvariants(input: VerifyInput): Promise<Verification
 
     const logged = await pool.query<{ total: number }>(LOGGED_REQUESTS_SQL, [input.accountIds]);
     const loggedRequests = logged.rows[0]?.total ?? 0;
+    // Up to one in-flight request per connection may commit after the generator stops; negative is a bug.
     const extra = loggedRequests - input.successfulResponses;
     checks.push({
       name: 'every successful response has exactly one log row',

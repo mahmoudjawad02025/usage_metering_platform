@@ -12,6 +12,7 @@ export async function withTransaction<T>(work: (client: PoolClient) => Promise<T
     await client.query('ROLLBACK').catch(() => undefined);
     throw err;
   } finally {
+    // Always release; a leaked client eventually starves the pool.
     client.release();
   }
 }

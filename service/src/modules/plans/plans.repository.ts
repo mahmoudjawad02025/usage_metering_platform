@@ -118,6 +118,7 @@ export async function updateOwnedPlan(
   planId: string,
   patch: UpdatePlanInput,
 ): Promise<Plan | null> {
+  // NOT is_predefined is a second safety net behind the service's 403 on predefined plans.
   const { rows } = await pool.query<PlanRow>(
     `UPDATE plans
      SET name = COALESCE($3, name),

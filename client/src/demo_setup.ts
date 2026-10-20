@@ -62,6 +62,7 @@ export class DemoSession {
       console.log(`reusing the saved demo account: ${account.name}`);
       return client;
     } catch (err) {
+      // 401 means key and DB are out of sync (e.g. after down -v); recreate. Other errors bubble up.
       if (err instanceof ServiceError && err.status === 401) {
         console.log('the saved API key is no longer valid, creating a new demo account');
         return null;

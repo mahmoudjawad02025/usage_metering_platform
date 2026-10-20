@@ -59,6 +59,7 @@ export async function getAssignablePlan(
   planId: string,
   scope: PlanScope,
 ): Promise<Plan> {
+  // FK only proves the plan exists; visibility and scope must be checked here.
   const plan = await plansRepository.findVisiblePlanById(accountId, planId);
   if (!plan) throw new NotFoundError('Plan not found');
 

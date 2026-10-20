@@ -7,6 +7,7 @@ import type { AuthenticatedAccount } from '../../modules/accounts/accounts.types
 export const authenticateApiKey: RequestHandler = async (req, _res, next) => {
   const apiKey = req.header('x-api-key');
   if (!apiKey) throw new UnauthorizedError('Missing API key');
+  // Same message for malformed and unknown keys so attackers cannot tell which check failed.
   if (!looksLikeApiKey(apiKey)) throw new UnauthorizedError('Invalid API key');
 
   const account = await findAccountByApiKeyHash(hashApiKey(apiKey));

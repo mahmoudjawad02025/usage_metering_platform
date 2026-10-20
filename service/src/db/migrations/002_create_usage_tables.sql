@@ -1,3 +1,4 @@
+-- No ON DELETE CASCADE on these FKs: usage history must not disappear silently with a parent row.
 CREATE TABLE account_usage (
   account_id UUID NOT NULL REFERENCES accounts (id),
   period     DATE NOT NULL CHECK (EXTRACT(DAY FROM period) = 1),
@@ -24,6 +25,7 @@ CREATE TABLE usage_requests (
   rejected_level  TEXT CHECK (rejected_level IN ('account', 'user')),
   account_plan_id UUID NOT NULL REFERENCES plans (id),
   user_plan_id    UUID NOT NULL REFERENCES plans (id),
+  -- Snapshot of limits at decision time so history stays true after plan edits.
   applied_limits  JSONB NOT NULL,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT usage_requests_unique_request_per_account UNIQUE (account_id, request_id),

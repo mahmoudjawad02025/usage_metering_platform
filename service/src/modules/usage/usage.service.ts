@@ -77,6 +77,7 @@ export async function consumeUnits(
   input: ConsumeInput,
   now: Date = new Date(),
 ): Promise<ConsumeResponse> {
+  // One transaction so counters and the usage log commit together or not at all.
   return withTransaction(async (client) => {
     const userExists = await usageRepository.userBelongsToAccount(client, accountId, input.userId);
     if (!userExists) throw new NotFoundError('User not found');
@@ -84,8 +85,10 @@ export async function consumeUnits(
     const period = getCurrentUtcPeriod(now);
     const counters = await usageRepository.lockCounters(client, accountId, input.userId, period);
 
+    // After the account lock so same-account retries see each other's committed log rows.
     const existing = await usageRepository.findRequest(client, accountId, input.requestId);
     if (existing) {
+      // Same requestId must not mean a different payload; treat that as a conflict, not a replay.
       if (existing.userId !== input.userId || existing.units !== input.units) {
         throw new ConflictError(
           'This requestId was already used with a different userId or units',
@@ -95,6 +98,7 @@ export async function consumeUnits(
       return buildConsumeResponse(existing, true);
     }
 
+    // Live plan read after locks (never cached) so edits apply to the next request.
     const { accountPlan, userPlan } = await usageRepository.getPlans(client, accountId, input.userId);
     const appliedLimits: AppliedLimits = {
       account: toSnapshot(accountPlan, counters.accountConsumed),
