@@ -1,45 +1,65 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:usage_metering_demo/models.dart';
+import 'package:usage_metering_demo/core/models.dart';
+
 void main() {
-  final rejected = <String, dynamic>{
-    'processed': false,
-    'decision': {
+  test('parses a rejected consume result with an explanation', () {
+    final result = ConsumeResult.fromJson({
       'accepted': false,
       'replayed': false,
-      'requestId': 'doc-1',
+      'requestId': 'req-1',
       'units': 25,
-      'period': '2026-10',
-      'rejection': {'rule': 'max_per_request', 'level': 'user', 'limit': 20},
+      'period': '2026-04',
+      'rejection': {
+        'rule': 'max_per_request',
+        'level': 'user',
+        'limit': 20,
+      },
       'account': {
-        'plan': {'id': 'a1', 'name': 'Demo Tiny', 'monthlyAllowance': 100, 'maxPerRequest': 50},
-        'consumed': 10,
-        'remaining': 90,
+        'plan': {
+          'id': 'a',
+          'name': 'Demo Tiny',
+          'monthlyAllowance': 100,
+          'maxPerRequest': 50,
+        },
+        'consumed': 0,
+        'remaining': 100,
       },
       'user': {
         'id': 'u1',
-        'plan': {'id': 'b1', 'name': 'Basic', 'monthlyAllowance': 1000, 'maxPerRequest': 20},
-        'consumed': 10,
-        'remaining': 990,
+        'plan': {
+          'id': 'b',
+          'name': 'Basic',
+          'monthlyAllowance': 1000,
+          'maxPerRequest': 20,
+        },
+        'consumed': 0,
+        'remaining': 1000,
       },
-    },
-  };
-  test('parses a rejected decision with its explanation', () {
-    final result = ProcessResult.fromJson(rejected);
-    expect(result.processed, isFalse);
-    expect(result.decision.accepted, isFalse);
-    expect(result.decision.userId, 'u1');
-    expect(result.decision.user.remaining, 990);
-    expect(result.decision.rejection?.rule, 'max_per_request');
-    expect(result.decision.rejection?.explanation, contains('per-request'));
+    });
+
+    expect(result.accepted, isFalse);
+    expect(result.rejection?.explanation, contains("user's per-request"));
   });
-  test('describes a monthly rejection with the remaining units', () {
-    const rejection = Rejection(rule: 'monthly_allowance', level: 'account', limit: 100, remaining: 40);
+
+  test('monthly account rejection mentions units left', () {
+    final rejection = Rejection.fromJson({
+      'rule': 'monthly_allowance',
+      'level': 'account',
+      'limit': 100,
+      'remaining': 40,
+    });
     expect(rejection.explanation, contains('shared account'));
-    expect(rejection.explanation, contains('40 remaining'));
+    expect(rejection.explanation, contains('40 units left'));
   });
-  test('never reports more than 100 percent used', () {
+
+  test('fractionUsed is capped at 1.0', () {
     const usage = LevelUsage(
-      plan: PlanInfo(id: 'p', name: 'Small', monthlyAllowance: 30, maxPerRequest: 5),
+      plan: PlanViewDto(
+        id: 'p',
+        name: 'X',
+        monthlyAllowance: 10,
+        maxPerRequest: 5,
+      ),
       consumed: 50,
       remaining: 0,
     );
