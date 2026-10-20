@@ -87,7 +87,7 @@ Everything in the assignment brief is implemented:
 - **Explained decisions.** A rejection names the rule (`max_per_request` or `monthly_allowance`) and the level (`account` or `user`) that stopped it.
 - **Usage and history.** Consumed and remaining units for the account and each user, any UTC month; paginated request history with filters.
 - **Persistence.** Everything is stored in PostgreSQL and survives restarts (Docker volume).
-- **Example application and Docker Compose.** `docker compose up --build` starts the whole stack.
+- **Example application and Docker Compose.** `.\setup` starts the whole stack.
 - **Automated tests and load tests.** See [Testing](#testing) and [Performance](#performance).
 
 <br>
@@ -163,13 +163,13 @@ More detail and the reasons behind each choice: [`docs/design_decisions.md`](doc
 
 **Requirements:** Docker with Compose v2 (`docker compose`), and free ports `3000`, `5432` and `8080`.
 
-```bash
+```powershell
 git clone https://github.com/mahmoudjawad02025/usage_metering_platform.git
 cd usage_metering_platform
-docker compose up --build
+.\setup
 ```
 
-The first build takes a few minutes because it downloads a Flutter image. No `.env` file is needed: every setting has a default (see below).
+`.\setup` starts Docker Desktop if needed, builds and starts the stack in the background, waits until the example app answers, then opens http://localhost:8080. The first build takes a few minutes because it downloads a Flutter image. No `.env` file is needed: every setting has a default (see below).
 
 | What | Where |
 | :-- | :-- |
@@ -179,7 +179,7 @@ The first build takes a few minutes because it downloads a Flutter image. No `.e
 
 Startup order is enforced with health checks: PostgreSQL becomes healthy, then the service (it runs the migrations and creates the predefined plans), then the example application (BFF waits for the service; a demo account is created when you click “Start demo” in the UI).
 
-**Stop and keep the data:** `docker compose down`. **Stop and delete all data:** `docker compose down -v`.
+**Stop and keep the data:** `.\stop`. **Stop and delete all data:** `.\reset`. **Start again without rebuilding:** `.\start`.
 
 **Create an account yourself** (the admin key creates accounts, the API key it returns is shown only once):
 
@@ -537,6 +537,10 @@ Honest limits of these tests: the load generator is closed-loop (fixed connectio
 ```
 usage_metering_platform/
 ├── docker-compose.yml          # PostgreSQL + service + example application
+├── setup.bat                   # build, start stack, open example app
+├── start.bat                   # start stack without rebuilding
+├── stop.bat                    # stop stack, keep data
+├── reset.bat                   # stop stack and delete volumes
 ├── .env.example                # every setting, with defaults
 ├── docs/
 │   ├── api.md                  # API reference with curl examples
