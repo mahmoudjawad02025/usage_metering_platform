@@ -8,16 +8,27 @@ import 'features/auth/auth_cubit.dart';
 import 'features/auth/auth_repository.dart';
 import 'features/auth/auth_state.dart';
 import 'features/auth/view/auth_page.dart';
+import 'features/dashboard/dashboard_repository.dart';
+import 'features/plans/plans_repository.dart';
+import 'features/users/users_repository.dart';
 
 void main() {
   final apiClient = ApiClient();
   final authRepository = AuthRepository(apiClient);
+  final dashboardRepository = DashboardRepository(apiClient);
+  final usersRepository = UsersRepository(apiClient);
+  final plansRepository = PlansRepository(apiClient);
 
   runApp(
     MultiRepositoryProvider(
       providers: [
         RepositoryProvider<ApiClient>.value(value: apiClient),
         RepositoryProvider<AuthRepository>.value(value: authRepository),
+        RepositoryProvider<DashboardRepository>.value(
+          value: dashboardRepository,
+        ),
+        RepositoryProvider<UsersRepository>.value(value: usersRepository),
+        RepositoryProvider<PlansRepository>.value(value: plansRepository),
       ],
       child: BlocProvider(
         create: (_) => AuthCubit(authRepository)..bootstrap(),
@@ -44,7 +55,6 @@ class UsageDemoApp extends StatelessWidget {
               body: Center(child: CircularProgressIndicator()),
             );
           }
-          // Stay on auth until the one-time API key is acknowledged.
           if (state.isAuthenticated && state.oneTimeApiKey == null) {
             return const AppShell();
           }
