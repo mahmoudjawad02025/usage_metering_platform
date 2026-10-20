@@ -8,7 +8,9 @@ import 'features/auth/auth_cubit.dart';
 import 'features/auth/auth_repository.dart';
 import 'features/auth/auth_state.dart';
 import 'features/auth/view/auth_page.dart';
+import 'features/consume/consume_repository.dart';
 import 'features/dashboard/dashboard_repository.dart';
+import 'features/history/history_repository.dart';
 import 'features/plans/plans_repository.dart';
 import 'features/users/users_repository.dart';
 
@@ -18,6 +20,8 @@ void main() {
   final dashboardRepository = DashboardRepository(apiClient);
   final usersRepository = UsersRepository(apiClient);
   final plansRepository = PlansRepository(apiClient);
+  final consumeRepository = ConsumeRepository(apiClient);
+  final historyRepository = HistoryRepository(apiClient);
 
   runApp(
     MultiRepositoryProvider(
@@ -29,6 +33,8 @@ void main() {
         ),
         RepositoryProvider<UsersRepository>.value(value: usersRepository),
         RepositoryProvider<PlansRepository>.value(value: plansRepository),
+        RepositoryProvider<ConsumeRepository>.value(value: consumeRepository),
+        RepositoryProvider<HistoryRepository>.value(value: historyRepository),
       ],
       child: BlocProvider(
         create: (_) => AuthCubit(authRepository)..bootstrap(),
